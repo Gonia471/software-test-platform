@@ -1,0 +1,12 @@
+# 本地开发可选：无 MySQL 时可用 H2，便于先跑通后端。
+# 使用方式：spring.profiles.active=dev
+# 并在 pom.xml 中增加 H2 依赖后取消下面注释。
+
+# spring:
+#   datasource:
+#     url: jdbc:h2:mem:test_platform;DB_CLOSE_DELAY=-1
+#     username: sa
+#     password:
+#     driver-class-name: org.h2.Driver
+#   jpa:
+#     database-platform: org.hibernate.dialect.H2Dialect

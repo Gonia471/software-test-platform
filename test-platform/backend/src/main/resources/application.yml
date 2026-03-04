@@ -1,0 +1,36 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: software-test-platform
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/test_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: 4471
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      minimum-idle: 2
+      maximum-pool-size: 10
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+    open-in-view: false
+
+# JWT（生产环境请更换 secret 并使用环境变量）
+app:
+  jwt:
+    secret: software-test-platform-jwt-secret-key-at-least-32-bytes
+    expiration-ms: 86400000   # 24 小时
+
+# 开发时可改为 true 查看 SQL
+# logging:
+#   level:
+#     org.hibernate.SQL: debug
