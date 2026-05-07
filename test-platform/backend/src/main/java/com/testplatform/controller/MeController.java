@@ -12,6 +12,10 @@ import java.util.Map;
 @RequestMapping("/api/auth")
 public class MeController {
 
+    /**
+     * 获取当前登录用户的信息：
+     * 从认证上下文中读取用户名，未登录则返回 401。
+     */
     @GetMapping("/me")
     public ResponseEntity<Map<String, String>> me(@AuthenticationPrincipal String username) {
         if (username == null) {

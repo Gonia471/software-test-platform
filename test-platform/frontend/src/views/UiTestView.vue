@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="ui-test-page">
     <el-page-header
       content="UI 测试用例编排"
@@ -46,6 +46,13 @@
             </div>
           </div>
           <div class="case-title-row">
+            <span class="meta-label">用例 ID</span>
+            <el-input
+              :value="testCase.seq"
+              size="small"
+              class="case-id-input"
+              disabled
+            />
             <span class="meta-label">用例标题</span>
             <el-input
               v-model="testCase.name"
@@ -72,6 +79,12 @@
             </el-button>
           </div>
           <div class="case-actions-meta">
+            <el-switch
+              v-model="showBrowser"
+              size="small"
+              active-text="显示浏览器窗口"
+              inactive-text="无头运行"
+            />
             <span class="steps-tip">当前步骤数：{{ steps.length }}</span>
           </div>
         </div>
@@ -110,6 +123,73 @@
         </el-row>
       </div>
     </el-card>
+
+    <el-dialog
+      v-model="instanceDialogVisible"
+      title="选择执行实例"
+      width="420px"
+      :close-on-click-modal="false"
+    >
+      <div v-if="instanceLoading">正在加载执行实例...</div>
+      <div v-else>
+        <div v-if="!instances.length">暂无可用执行实例</div>
+        <el-radio-group v-else v-model="selectedInstanceId">
+          <el-radio
+            v-for="ins in instances"
+            :key="ins.id"
+            :label="ins.id"
+          >
+            {{ ins.name }}（{{ ins.type }}）<span v-if="!ins.enabled"> - 已禁用</span>
+          </el-radio>
+        </el-radio-group>
+      </div>
+      <template #footer>
+        <el-button @click="instanceDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :disabled="!selectedInstanceId || !instances.length"
+          @click="confirmRunOnInstance"
+        >
+          开始运行
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <el-drawer
+      v-model="executionDialogVisible"
+      :title="isExecutionRunning ? '正在执行 UI 自动化测试…' : 'UI 自动化测试报告'"
+      direction="rtl"
+      size="min(720px, 92vw)"
+      :close-on-click-modal="false"
+      destroy-on-close
+      class="execution-report-drawer"
+      @close="stopPolling"
+    >
+      <div v-if="executionDetail" class="execution-drawer-body">
+        <UiExecutionReportPanel :detail="executionDetail" />
+      </div>
+      <div v-else class="execution-drawer-empty">正在加载执行信息…</div>
+      <template #footer>
+        <div class="drawer-footer">
+          <el-button @click="executionDialogVisible = false">关闭</el-button>
+          <el-button
+            v-if="isExecutionRunning"
+            type="danger"
+            @click="handleStopExecution"
+          >
+            停止执行
+          </el-button>
+          <el-button
+            v-if="currentExecutionId && !isExecutionRunning"
+            type="primary"
+            plain
+            @click="goToReportPage"
+          >
+            在报告中心查看
+          </el-button>
+        </div>
+      </template>
+    </el-drawer>
   </div>
 </template>
 
@@ -121,9 +201,18 @@ import { ElMessage } from 'element-plus'
 import ActionPalette from '../components/ui-test/ActionPalette.vue'
 import StepList from '../components/ui-test/StepList.vue'
 import StepForm from '../components/ui-test/StepForm.vue'
+import UiExecutionReportPanel from '../components/ui-test/UiExecutionReportPanel.vue'
 import { actionGroups, createStepFromAction } from './uiTestActions'
 import { useUiTestStore } from '../stores/uiTest'
 import { useUserStore } from '../stores/user'
+import {
+  createCase,
+  updateCase,
+  getInstances,
+  startExecution,
+  getExecutionDetail,
+  stopExecution,
+} from '../api/uiTest'
 
 const route = useRoute()
 const router = useRouter()
@@ -147,6 +236,8 @@ const dragGroupPalette = {
 const stepListRef = ref(null)
 const testCase = reactive({
   id: caseId,
+  seq: '',
+  backendId: null,
   teamId: '',
   moduleKey: '',
   name: '',
@@ -154,6 +245,19 @@ const testCase = reactive({
   creator: '',
   steps: [],
 })
+
+const executionDialogVisible = ref(false)
+const executionDetail = ref(null)
+const currentExecutionId = ref(null)
+let pollingTimer = null
+
+const instanceDialogVisible = ref(false)
+const instances = ref([])
+const selectedInstanceId = ref(null)
+const instanceLoading = ref(false)
+
+// 显示浏览器窗口：true 表示可见浏览器，false 表示无头运行
+const showBrowser = ref(true)
 
 const STEPS_KEY_PREFIX = 'ui-test-case-steps-'
 
@@ -228,6 +332,7 @@ function initFromStore() {
     const fallbackTeam = uiStore.teams[0]
     const fallbackModule = uiStore.modules[0]
     testCase.id = caseId
+    testCase.seq = ''
     testCase.teamId = fallbackTeam?.id || ''
     testCase.moduleKey = fallbackModule?.key || ''
     testCase.name = '未命名用例'
@@ -235,6 +340,8 @@ function initFromStore() {
     testCase.creator = userStore.username || '未命名用户'
   } else {
     testCase.id = meta.id
+    testCase.seq = meta.seq ?? ''
+    testCase.backendId = meta.backendId ?? null
     testCase.teamId = meta.teamId
     testCase.moduleKey = meta.moduleKey
     testCase.name = meta.name
@@ -328,15 +435,32 @@ function onChangeOrder(targetIndex) {
   testCase.steps.splice(to, 0, moved)
 }
 
-function runCase() {
-  ElMessage.info('目前为前端演示：执行逻辑将在 UI 测试后端完成后接入')
+const isExecutionRunning = computed(
+  () =>
+    executionDetail.value &&
+    ['PENDING', 'RUNNING'].includes(executionDetail.value.status),
+)
+
+function stopPolling() {
+  if (pollingTimer) {
+    clearInterval(pollingTimer)
+    pollingTimer = null
+  }
 }
 
-function goBack() {
-  router.push('/ui-test')
+async function pollExecution() {
+  if (!currentExecutionId.value) return
+  try {
+    const res = await getExecutionDetail(currentExecutionId.value)
+    executionDetail.value = res.data
+    const s = res.data?.status
+    if (s && !['PENDING', 'RUNNING'].includes(s)) stopPolling()
+  } catch {
+    stopPolling()
+  }
 }
 
-function saveCase() {
+async function saveCase() {
   if (!caseId) return
   saveStepsForCase(caseId, testCase.steps)
   uiStore.updateCaseMeta(caseId, {
@@ -345,7 +469,108 @@ function saveCase() {
     teamId: testCase.teamId,
     moduleKey: testCase.moduleKey,
   })
-  ElMessage.success('用例已保存')
+
+  const payload = {
+    name: testCase.name || '未命名用例',
+    description: testCase.summary || '',
+    steps: testCase.steps,
+  }
+
+  try {
+    if (testCase.backendId) {
+      await updateCase(testCase.backendId, payload)
+    } else {
+      const res = await createCase(payload)
+      testCase.backendId = res.data.id
+      uiStore.updateCaseMeta(caseId, { backendId: res.data.id })
+    }
+    ElMessage.success('用例已保存')
+    return testCase.backendId
+  } catch (err) {
+    ElMessage.error(err.response?.data?.message || '保存失败')
+    return null
+  }
+}
+
+async function runCase() {
+  if (!testCase.steps?.length) {
+    ElMessage.warning('请先添加测试步骤')
+    return
+  }
+
+  // 每次执行前强制保存最新步骤到后端，避免执行旧版本
+  const backendId = await saveCase()
+  if (!backendId) return
+
+  try {
+    instanceLoading.value = true
+    const instancesRes = await getInstances()
+    const list = instancesRes.data || []
+    if (!list.length) {
+      ElMessage.error('无可用的执行实例')
+      return
+    }
+    instances.value = list
+
+    // 默认选择：优先已启用的本地实例（名称含“本地”或 type 为 LOCAL），否则第一个
+    const preferred =
+      list.find((i) => i.enabled && (i.type === 'LOCAL' || i.name?.includes('本地'))) ||
+      list.find((i) => i.enabled) ||
+      list[0]
+    selectedInstanceId.value = preferred.id
+    instanceDialogVisible.value = true
+  } catch (err) {
+    ElMessage.error(err.response?.data?.message || '启动执行失败')
+  } finally {
+    instanceLoading.value = false
+  }
+}
+
+async function confirmRunOnInstance() {
+  if (!selectedInstanceId.value) return
+  const backendId = testCase.backendId
+  if (!backendId) {
+    ElMessage.error('用例尚未保存，无法执行')
+    return
+  }
+  try {
+    const execRes = await startExecution({
+      testCaseId: backendId,
+      instanceId: selectedInstanceId.value,
+      headless: !showBrowser.value,
+      stopOnFailure: false,
+      screenshotOnFailure: true,
+    })
+    instanceDialogVisible.value = false
+    currentExecutionId.value = execRes.data.executionId
+    executionDetail.value = { status: execRes.data.status }
+    executionDialogVisible.value = true
+    pollingTimer = setInterval(pollExecution, 1500)
+  } catch (err) {
+    const msg = err.response?.data?.message || err.message || '启动执行失败，请检查后端服务是否正常'
+    ElMessage.error(msg)
+    console.error('[UI Test] startExecution failed:', err)
+  }
+}
+
+async function handleStopExecution() {
+  if (!currentExecutionId.value) return
+  try {
+    await stopExecution(currentExecutionId.value)
+    ElMessage.info('已请求停止执行')
+    pollExecution()
+  } catch {
+    ElMessage.error('停止请求失败')
+  }
+}
+
+function goBack() {
+  router.push('/ui-test')
+}
+
+function goToReportPage() {
+  executionDialogVisible.value = false
+  router.push({ path: '/reports', query: { uiExecution: String(currentExecutionId.value) } })
 }
 </script>
 
@@ -423,6 +648,10 @@ function saveCase() {
   margin-top: 4px;
 }
 
+.case-id-input {
+  width: 90px;
+}
+
 .case-name-input {
   flex: 1;
 }
@@ -469,5 +698,22 @@ function saveCase() {
 
 .col {
   height: 100%;
+}
+
+.execution-drawer-body {
+  padding: 0 4px 8px;
+}
+
+.execution-drawer-empty {
+  padding: 24px;
+  text-align: center;
+  color: #94a3b8;
+}
+
+.drawer-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 </style>

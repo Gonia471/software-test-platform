@@ -1,0 +1,13 @@
+{
+  "name": "示例用例",
+  "description": "用于接口测试",
+  "steps": [
+    {
+      "id": "step-1",
+      "type": "browser",
+      "action": "openPage",
+      "description": "打开网页",
+      "parameters": { "url": "https://example.com" }
+    }
+  ]
+}

@@ -1,8 +1,11 @@
 import axios from 'axios'
 
-// 开发时 Vite 会把 /api 代理到 http://localhost:8080，因此 baseURL 用相对路径即可
+const envBaseUrl = import.meta.env.VITE_API_BASE_URL
+const normalizedBaseUrl = envBaseUrl ? envBaseUrl.replace(/\/+$/, '') : ''
+
 const request = axios.create({
-  baseURL: '/api',
+  // 未配置 VITE_API_BASE_URL 时，默认走 Vite 代理
+  baseURL: normalizedBaseUrl ? `${normalizedBaseUrl}/api` : '/api',
   timeout: 10000,
   headers: { 'Content-Type': 'application/json' },
 })
