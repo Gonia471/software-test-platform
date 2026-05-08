@@ -66,14 +66,17 @@ const router = createRouter({
   routes,
 })
 
+function routeRequiresAuth(to) {
+  return to.matched.some(r => r.meta && r.meta.requiresAuth === true)
+}
+
 router.beforeEach((to, from, next) => {
   let token = localStorage.getItem('token')
 
-  // 开发阶段：如果没有登录信息，自动注入一个“假登录”，避免每次手动登录
-  if (to.meta.requiresAuth !== false && !token) {
+  // 开发/演示：未登录时注入占位 token，避免本地与演示环境白屏卡死
+  if (routeRequiresAuth(to) && !token) {
     localStorage.setItem('token', 'dev-token')
     localStorage.setItem('username', '开发模式用户')
-    token = 'dev-token'
   }
 
   next()
