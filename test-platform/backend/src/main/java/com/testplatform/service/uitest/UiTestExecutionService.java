@@ -67,6 +67,8 @@ public class UiTestExecutionService {
         options.setHeadless(req.isHeadless());
         options.setStopOnFailure(req.isStopOnFailure());
         options.setScreenshotOnFailure(req.isScreenshotOnFailure());
+        options.setScreenshotEveryStep(
+                req.getScreenshotEveryStep() == null || Boolean.TRUE.equals(req.getScreenshotEveryStep()));
 
         UiTestExecution execution = new UiTestExecution();
         execution.setTestCaseId(req.getTestCaseId());
@@ -153,6 +155,7 @@ public class UiTestExecutionService {
         map.put("headless", options.isHeadless());
         map.put("stopOnFailure", options.isStopOnFailure());
         map.put("screenshotOnFailure", options.isScreenshotOnFailure());
+        map.put("screenshotEveryStep", options.isScreenshotEveryStep());
         try {
             return objectMapper.writeValueAsString(map);
         } catch (Exception e) {

@@ -42,7 +42,7 @@ public class UiTestExecutionController {
     }
 
     /**
-     * 失败步骤截图（PNG），按执行 ID 与步骤序号（1 起）读取。
+     * 步骤快照（PNG）：每步执行后或失败时生成，路径为 screenshots/ui/{executionId}/step-{index}.png。
      */
     @GetMapping("/{id}/screenshots/{stepIndex}")
     public ResponseEntity<byte[]> screenshot(

@@ -67,12 +67,12 @@
         <div v-if="s.logText" class="step-log">{{ s.logText }}</div>
         <div v-if="s.errorMessage" class="step-err">{{ s.errorMessage }}</div>
         <div v-if="s.screenshotUrl" class="step-shot">
-          <div class="shot-label">失败截图</div>
+          <div class="shot-label">{{ shotLabel(s.status) }}</div>
           <el-image
-            :src="s.screenshotUrl"
+            :src="absoluteShotUrl(s.screenshotUrl)"
             fit="contain"
             class="shot-img"
-            :preview-src-list="[s.screenshotUrl]"
+            :preview-src-list="[absoluteShotUrl(s.screenshotUrl)]"
             preview-teleported
           />
         </div>
@@ -93,6 +93,22 @@ import { computed } from 'vue'
 const props = defineProps({
   detail: { type: Object, default: null },
 })
+
+/** 前端与 API 跨域部署时，图片须用后端绝对地址 */
+function absoluteShotUrl(url) {
+  if (!url) return ''
+  if (/^https?:\/\//i.test(url)) return url
+  const base =
+    typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL
+      ? String(import.meta.env.VITE_API_BASE_URL).replace(/\/+$/, '')
+      : ''
+  return base ? `${base}${url}` : url
+}
+
+function shotLabel(status) {
+  if (status === 'FAILED' || status === 'SKIPPED') return '步骤快照（失败时）'
+  return '步骤快照'
+}
 
 const isRunning = computed(() =>
   props.detail?.status === 'PENDING' || props.detail?.status === 'RUNNING',
@@ -405,7 +421,7 @@ function stepCardClass(status) {
 
 .shot-img {
   max-width: 100%;
-  max-height: 220px;
+  max-height: 320px;
   border-radius: 6px;
   border: 1px solid #e2e8f0;
 }

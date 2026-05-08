@@ -101,6 +101,15 @@ public class UiTestExecutionEngine {
                 try {
                     StepResult result = stepDispatcher.dispatch(step, ctx);
                     fillStepSuccess(stepRecord, result);
+                    // 每步快照：步骤执行完成后的页面状态（答辩/报告展示用）
+                    if (driver instanceof TakesScreenshot ts && options.isScreenshotEveryStep()) {
+                        try {
+                            String path = saveScreenshot(ts, screenshotRoot, i + 1);
+                            stepRecord.setScreenshotPath(path);
+                        } catch (Exception shotEx) {
+                            log.warn("[UI执行] 步骤 {} 快照失败: {}", i + 1, shotEx.getMessage());
+                        }
+                    }
                 } catch (Exception e) {
                     String msg = e.getMessage() != null ? e.getMessage() : e.toString();
                     stepRecord.setStatus("FAILED");
@@ -172,6 +181,7 @@ public class UiTestExecutionEngine {
         stepRecord.setErrorMessage(null);
         stepRecord.setLogText(result.getLogText());
         stepRecord.setEndTime(Instant.now());
+        // handler 内生成的截图（如 AI 步骤）；若后续引擎按步截全页会覆盖
         if (result.getScreenshotPath() != null) {
             stepRecord.setScreenshotPath(result.getScreenshotPath());
         }

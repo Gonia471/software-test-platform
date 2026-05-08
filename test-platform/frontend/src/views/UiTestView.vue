@@ -540,6 +540,7 @@ async function confirmRunOnInstance() {
       headless: !showBrowser.value,
       stopOnFailure: false,
       screenshotOnFailure: true,
+      screenshotEveryStep: true,
     })
     instanceDialogVisible.value = false
     currentExecutionId.value = execRes.data.executionId

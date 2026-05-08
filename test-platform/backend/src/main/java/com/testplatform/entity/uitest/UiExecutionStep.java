@@ -38,7 +38,7 @@ public class UiExecutionStep {
     @Column(columnDefinition = "TEXT")
     private String errorMessage;
 
-    @Column(name = "screenshot_path", length = 255)
+    @Column(name = "screenshot_path", length = 512)
     private String screenshotPath;
 
     @Lob
