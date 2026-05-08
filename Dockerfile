@@ -1,0 +1,14 @@
+FROM maven:3.9.9-eclipse-temurin-17 AS builder
+
+WORKDIR /build
+COPY test-platform/backend/pom.xml ./pom.xml
+COPY test-platform/backend/src ./src
+RUN mvn -DskipTests clean package
+
+FROM eclipse-temurin:17-jre-jammy
+
+WORKDIR /app
+COPY --from=builder /build/target/*.jar /app/app.jar
+
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]
