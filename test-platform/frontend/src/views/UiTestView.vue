@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="ui-test-page">
     <el-page-header
       content="UI 测试用例编排"
@@ -473,7 +473,7 @@ async function saveCase() {
   const payload = {
     name: testCase.name || '未命名用例',
     description: testCase.summary || '',
-    steps: testCase.steps,
+    steps: JSON.parse(JSON.stringify(testCase.steps ?? [])),
   }
 
   try {

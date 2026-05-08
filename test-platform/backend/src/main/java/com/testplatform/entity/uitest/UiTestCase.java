@@ -22,7 +22,9 @@ public class UiTestCase {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "steps_json", columnDefinition = "LONGTEXT")
+    /** LONGTEXT 仅在 MySQL 可用；PostgreSQL 用 @Lob 由 Hibernate 映射为 text */
+    @Lob
+    @Column(name = "steps_json")
     private String stepsJson;
 
     @Column(nullable = false, updatable = false)

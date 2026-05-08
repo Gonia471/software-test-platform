@@ -41,10 +41,12 @@ public class UiExecutionStep {
     @Column(name = "screenshot_path", length = 255)
     private String screenshotPath;
 
-    @Column(name = "log_text", columnDefinition = "LONGTEXT")
+    @Lob
+    @Column(name = "log_text")
     private String logText;
 
-    @Column(name = "raw_step_json", columnDefinition = "LONGTEXT")
+    @Lob
+    @Column(name = "raw_step_json")
     private String rawStepJson;
 }
 

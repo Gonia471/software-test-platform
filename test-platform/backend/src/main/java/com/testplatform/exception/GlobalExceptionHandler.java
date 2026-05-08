@@ -8,7 +8,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.dao.DataAccessException;
 
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -39,6 +39,15 @@ public class GlobalExceptionHandler {
                 : "请求体不是有效的 JSON";
         log.warn("请求体解析失败: {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", msg));
+    }
+
+    @ExceptionHandler(DataAccessException.class)
+    public ResponseEntity<Map<String, String>> handleDataAccess(DataAccessException e) {
+        log.error("数据访问失败", e);
+        Throwable root = e.getRootCause() != null ? e.getRootCause() : e;
+        String detail = root.getMessage() != null ? root.getMessage() : "数据保存失败";
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("message", "数据保存失败: " + detail));
     }
 
     @ExceptionHandler(Exception.class)
