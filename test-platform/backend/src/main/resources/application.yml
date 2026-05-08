@@ -8,8 +8,8 @@ spring:
     name: software-test-platform
 
   datasource:
-    # 本地：DB_URL 指向 MySQL。Render：平台会设 RENDER=true 并注入 DATABASE_URL（postgres://），
-    # 由 RenderDatabaseEnvironmentPostProcessor 转为 jdbc:postgresql://...；也可在面板里手动设 SPRING_DATASOURCE_URL。
+    # 本地：DB_URL 指向 MySQL。部署：面板里 DATABASE_URL（postgres://…）会通过 EnvironmentPostProcessor
+    # 转成 jdbc:postgresql://...；或直接设 SPRING_DATASOURCE_URL。
     url: ${SPRING_DATASOURCE_URL:${DB_URL:jdbc:mysql://localhost:3306/test_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}}
     username: ${SPRING_DATASOURCE_USERNAME:${DB_USERNAME:root}}
     password: ${SPRING_DATASOURCE_PASSWORD:${DB_PASSWORD:root}}

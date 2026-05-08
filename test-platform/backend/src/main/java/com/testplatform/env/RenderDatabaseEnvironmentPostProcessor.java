@@ -14,8 +14,9 @@ import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MapPropertySource;
 
 /**
- * Render 等 PaaS 会注入 {@code DATABASE_URL}（{@code postgres://...}），而 Spring 需要
- * {@code jdbc:postgresql://...}。在 {@code RENDER=true} 时把连接信息映射到标准数据源属性。
+ * Render/Heroku 等会把 {@code DATABASE_URL} 设为 {@code postgres://...}，而 Spring 需要
+ * {@code jdbc:postgresql://...}。只要未手动设 {@code SPRING_DATASOURCE_URL} 且变量为 Postgres，
+ * 就映射数据源（不要求 {@code RENDER=true} —— 手写 {@code DATABASE_URL} 时也生效）。
  */
 @Order(Ordered.LOWEST_PRECEDENCE)
 public class RenderDatabaseEnvironmentPostProcessor implements EnvironmentPostProcessor {
@@ -24,9 +25,6 @@ public class RenderDatabaseEnvironmentPostProcessor implements EnvironmentPostPr
 
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
-        if (!"true".equalsIgnoreCase(environment.getProperty("RENDER"))) {
-            return;
-        }
         if (hasExplicitSpringDatasourceUrl(environment)) {
             return;
         }
@@ -34,12 +32,15 @@ public class RenderDatabaseEnvironmentPostProcessor implements EnvironmentPostPr
         if (databaseUrl == null || databaseUrl.isBlank()) {
             return;
         }
-        if (databaseUrl.startsWith("jdbc:")) {
+        databaseUrl = databaseUrl.trim();
+        if (databaseUrl.startsWith("jdbc:postgresql:")) {
             putPostgresDatasource(environment, databaseUrl, null, null);
             return;
         }
-        Parsed parsed = parsePostgresUri(databaseUrl);
-        putPostgresDatasource(environment, parsed.jdbcUrl(), parsed.username(), parsed.password());
+        if (databaseUrl.startsWith("postgres://") || databaseUrl.startsWith("postgresql://")) {
+            Parsed parsed = parsePostgresUri(databaseUrl);
+            putPostgresDatasource(environment, parsed.jdbcUrl(), parsed.username(), parsed.password());
+        }
     }
 
     private static boolean hasExplicitSpringDatasourceUrl(ConfigurableEnvironment environment) {
