@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 
 @Component
@@ -46,6 +47,11 @@ public class WebDriverFactory {
 
         ChromeOptions chromeOptions = new ChromeOptions();
         chromeOptions.setPageLoadStrategy(PageLoadStrategy.NORMAL);
+        Path chromeBinary = resolveChromeBinary();
+        if (chromeBinary != null) {
+            chromeOptions.setBinary(chromeBinary.toString());
+            log.info("[ChromeDriver] 浏览器可执行文件: {}", chromeBinary);
+        }
         if (options.isHeadless()) {
             chromeOptions.addArguments("--headless=new");
         }
@@ -182,9 +188,14 @@ public class WebDriverFactory {
     }
 
     private void checkChromeInstalled() {
+        if (resolveChromeBinary() != null) {
+            log.info("[ChromeDriver] Chrome/Chromium 检测通过");
+            return;
+        }
         String os = System.getProperty("os.name", "").toLowerCase();
         if (!os.contains("win")) {
-            return;
+            throw new IllegalStateException(
+                    "当前环境未找到 Chrome/Chromium。Docker/Linux 请在镜像内安装浏览器，或设置环境变量 CHROME_BIN / GOOGLE_CHROME_BIN。");
         }
         boolean found = WINDOWS_CHROME_PATHS.stream().anyMatch(Files::exists);
         if (!found) {
@@ -192,6 +203,44 @@ public class WebDriverFactory {
                     "未在本机找到 Chrome 浏览器，请安装 Google Chrome 后再运行本地 UI 测试。" +
                     "下载地址: https://www.google.com/chrome/");
         }
-        log.info("[ChromeDriver] Chrome 浏览器检测通过");
+        log.info("[ChromeDriver] Chrome 浏览器检测通过（Windows）");
+    }
+
+    /**
+     * CHROME_BIN / GOOGLE_CHROME_BIN 优先，其次常见路径（Docker 中为 /usr/bin/google-chrome-stable）。
+     */
+    private Path resolveChromeBinary() {
+        String fromEnv = firstNonBlank(System.getenv("CHROME_BIN"), System.getenv("GOOGLE_CHROME_BIN"));
+        if (fromEnv != null) {
+            try {
+                Path p = Paths.get(normalizePath(fromEnv));
+                if (Files.exists(p) && Files.isRegularFile(p)) {
+                    return p;
+                }
+            } catch (InvalidPathException ignored) {
+            }
+        }
+        List<Path> candidates = new ArrayList<>();
+        candidates.addAll(WINDOWS_CHROME_PATHS);
+        candidates.add(Paths.get("/usr/bin/google-chrome-stable"));
+        candidates.add(Paths.get("/usr/bin/google-chrome"));
+        candidates.add(Paths.get("/usr/bin/chromium"));
+        candidates.add(Paths.get("/usr/bin/chromium-browser"));
+        for (Path p : candidates) {
+            if (Files.exists(p) && Files.isRegularFile(p)) {
+                return p;
+            }
+        }
+        return null;
+    }
+
+    private static String firstNonBlank(String a, String b) {
+        if (a != null && !a.isBlank()) {
+            return a.trim();
+        }
+        if (b != null && !b.isBlank()) {
+            return b.trim();
+        }
+        return null;
     }
 }
