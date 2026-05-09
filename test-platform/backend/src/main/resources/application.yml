@@ -8,11 +8,14 @@ spring:
     name: software-test-platform
 
   datasource:
-    # 本地：DB_URL → MySQL。部署：Web Service Environment 配置 DATABASE_URL=postgresql://... 时，
-    # 由 RenderPostgresDataSourceConfiguration 创建 PostgreSQL DataSource（勿把连接串仅写在数据库服务上）。
-    url: ${SPRING_DATASOURCE_URL:${DB_URL:jdbc:mysql://localhost:3306/test_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}}
-    username: ${SPRING_DATASOURCE_USERNAME:${DB_USERNAME:root}}
-    password: ${SPRING_DATASOURCE_PASSWORD:${DB_PASSWORD:root}}
+    # 默认使用 H2 内存数据库（本地开发无需安装 MySQL）
+    # 通过环境变量切换：
+    # - SPRING_PROFILES_ACTIVE=production 使用 MySQL
+    # - DATABASE_URL 存在时使用 PostgreSQL（Render 部署）
+    url: ${SPRING_DATASOURCE_URL:${DB_URL:jdbc:h2:mem:test_platform;DB_CLOSE_DELAY=-1;MODE=MySQL}}
+    username: ${SPRING_DATASOURCE_USERNAME:${DB_USERNAME:sa}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${DB_PASSWORD:}}
+    driver-class-name: org.h2.Driver
     hikari:
       minimum-idle: 2
       maximum-pool-size: 10
@@ -23,8 +26,14 @@ spring:
     show-sql: false
     properties:
       hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
         format_sql: true
     open-in-view: false
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
 
 # JWT（生产环境请更换 secret 并使用环境变量）
 app:
