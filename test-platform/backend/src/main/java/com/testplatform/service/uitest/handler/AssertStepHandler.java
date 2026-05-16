@@ -52,7 +52,7 @@ public class AssertStepHandler implements StepHandler {
             }
             case "assertElementExist" -> {
                 boolean expected = Boolean.TRUE.equals(params.get("expected"));
-                By locator = LocatorSupport.buildLocator(params);
+                By locator = LocatorSupport.buildLocator(params, driver);
                 List<WebElement> elements = driver.findElements(locator);
                 boolean exists = !elements.isEmpty();
                 if (exists != expected) {
@@ -62,7 +62,7 @@ public class AssertStepHandler implements StepHandler {
             }
             case "assertElementVisible" -> {
                 boolean expected = Boolean.TRUE.equals(params.get("expected"));
-                By locator = LocatorSupport.buildLocator(params);
+                By locator = LocatorSupport.buildLocator(params, driver);
                 List<WebElement> elements = driver.findElements(locator);
                 boolean visible = !elements.isEmpty() && elements.get(0).isDisplayed();
                 if (visible != expected) {

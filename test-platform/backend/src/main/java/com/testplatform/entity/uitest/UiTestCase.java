@@ -22,10 +22,24 @@ public class UiTestCase {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    /** LONGTEXT 仅在 MySQL 可用；PostgreSQL 用 @Lob 由 Hibernate 映射为 text */
+    @Column(name = "module_key", nullable = false, length = 64)
+    private String moduleKey;
+
     @Lob
     @Column(name = "steps_json")
     private String stepsJson;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "organization_id")
+    private com.testplatform.entity.Organization organization;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "project_id")
+    private com.testplatform.entity.Project project;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private com.testplatform.entity.User user;
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();

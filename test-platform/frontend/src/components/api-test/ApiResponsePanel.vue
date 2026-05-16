@@ -1,26 +1,49 @@
 <template>
   <div class="api-response-panel">
     <div v-if="!response" class="response-empty">
-      <el-icon :size="48"><Promotion /></el-icon>
-      <p>点击「发送」发起请求</p>
+      <div class="empty-illustration">
+        <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="32" cy="32" r="28" stroke="#e2e8f0" stroke-width="2" stroke-dasharray="4 4"/>
+          <path d="M32 20v12l8 4" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <p class="empty-title">暂无响应数据</p>
+      <p class="empty-desc">发送请求后可在此查看响应结果</p>
     </div>
 
     <template v-else>
       <div class="response-overview">
-        <el-tag :type="statusTagType" size="large">{{ response.status }} {{ response.statusText || '' }}</el-tag>
-        <span class="response-meta">耗时 {{ response.duration }}ms</span>
-        <span class="response-meta">大小 {{ formatSize(response.size) }}</span>
-        <el-button link size="small" @click="copyResponse">复制</el-button>
+        <div class="overview-left">
+          <el-tooltip :content="statusDescription" placement="top">
+            <el-tag :type="statusTagType" size="large" class="status-tag">
+              {{ response.status || '-' }} {{ chineseStatusText }}
+            </el-tag>
+          </el-tooltip>
+          <div class="response-meta-item">
+            <span class="meta-icon"><Clock /></span>
+            <span>耗时 {{ response.duration || 0 }}ms</span>
+          </div>
+          <div class="response-meta-item">
+            <span class="meta-icon"><Document /></span>
+            <span>大小 {{ formatSize(response.size) }}</span>
+          </div>
+        </div>
+        <el-button link size="small" @click="copyResponse" class="copy-btn">
+          <CopyDocument /> 复制结果
+        </el-button>
       </div>
 
       <el-tabs v-model="activeTab" class="response-tabs">
-        <el-tab-pane label="Body" name="body">
+        <el-tab-pane label="响应体" name="body">
           <div class="response-body">
-            <pre v-if="response.body">{{ formattedBody }}</pre>
-            <pre v-else class="empty">(空响应)</pre>
+            <pre v-if="response.body || response.error">{{ response.error || formattedBody }}</pre>
+            <div v-else class="empty-body">
+              <el-icon><Document /></el-icon>
+              <span>响应体为空</span>
+            </div>
           </div>
         </el-tab-pane>
-        <el-tab-pane label="Headers" name="headers">
+        <el-tab-pane label="响应头" name="headers">
           <div class="response-headers">
             <div
               v-for="(val, key) in (response.headers || {})"
@@ -29,6 +52,9 @@
             >
               <span class="header-key">{{ key }}</span>
               <span class="header-val">{{ val }}</span>
+            </div>
+            <div v-if="!response.headers || Object.keys(response.headers).length === 0" class="empty-headers">
+              无响应头
             </div>
           </div>
         </el-tab-pane>
@@ -56,7 +82,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { Promotion, CircleCheck, CircleClose } from '@element-plus/icons-vue'
+import { Clock, Document, CopyDocument, CircleCheck, CircleClose } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
 const props = defineProps({
@@ -65,6 +91,31 @@ const props = defineProps({
 })
 
 const activeTab = ref('body')
+
+const statusMap = {
+  200: { text: '成功', desc: '请求已成功处理' },
+  201: { text: '已创建', desc: '请求成功并且服务器创建了新的资源' },
+  204: { text: '无内容', desc: '服务器成功处理了请求，但没有返回内容' },
+  400: { text: '错误请求', desc: '服务器不理解请求的语法' },
+  401: { text: '未授权', desc: '请求要求身份验证' },
+  403: { text: '已禁止', desc: '服务器拒绝请求' },
+  404: { text: '未找到', desc: '服务器找不到请求的资源' },
+  405: { text: '方法禁用', desc: '禁用请求中指定的方法' },
+  500: { text: '服务器错误', desc: '服务器内部错误' },
+  502: { text: '错误网关', desc: '服务器作为网关或代理，从上游服务器收到无效响应' },
+  503: { text: '服务不可用', desc: '服务器目前无法使用' },
+  504: { text: '网关超时', desc: '服务器作为网关或代理，但是没有及时从上游服务器收到请求' }
+}
+
+const chineseStatusText = computed(() => {
+  const s = props.response?.status
+  return statusMap[s]?.text || props.response?.statusText || '未知状态'
+})
+
+const statusDescription = computed(() => {
+  const s = props.response?.status
+  return statusMap[s]?.desc || '无详细描述'
+})
 
 const statusTagType = computed(() => {
   const s = props.response?.status
@@ -108,8 +159,8 @@ function copyResponse() {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #fff;
-  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.9) 0%, rgba(255, 255, 255, 0.98) 100%);
+  border-radius: var(--border-radius);
   overflow: hidden;
 }
 
@@ -119,26 +170,73 @@ function copyResponse() {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #9ca3af;
-  gap: 14px;
+  padding: 40px 20px;
+  gap: 12px;
+}
+
+.empty-illustration {
+  margin-bottom: 8px;
+  opacity: 0.7;
 }
 
 .response-empty p {
   margin: 0;
-  font-size: 14px;
+}
+
+.empty-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.empty-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
 .response-overview {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 16px;
   padding: 16px 20px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.92);
+  background: linear-gradient(135deg, #fbfdff 0%, #f3f8ff 100%);
 }
 
-.response-meta {
+.overview-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.status-tag {
+  font-weight: 600;
   font-size: 13px;
-  color: #6b7280;
+}
+
+.response-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.meta-icon {
+  display: inline-flex;
+  color: #94a3b8;
+}
+
+.copy-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary);
+}
+
+.copy-btn:hover {
+  color: var(--primary-color);
 }
 
 .response-tabs {
@@ -148,12 +246,11 @@ function copyResponse() {
   flex-direction: column;
 }
 
-/* Tab 头部：与请求编辑器一致的间距 */
 .response-tabs :deep(.el-tabs__header) {
   margin: 0;
   padding: 0 20px;
-  background: #fafafa;
-  border-bottom: 1px solid #e5e7eb;
+  background: rgba(255, 255, 255, 0.84);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.92);
 }
 
 .response-tabs :deep(.el-tabs__item) {
@@ -162,6 +259,7 @@ function copyResponse() {
   line-height: 44px;
   font-size: 13px;
   font-weight: 500;
+  color: var(--text-secondary);
 }
 
 .response-tabs :deep(.el-tabs__item + .el-tabs__item) {
@@ -169,31 +267,31 @@ function copyResponse() {
 }
 
 .response-tabs :deep(.el-tabs__item.is-active) {
-  color: #4f46e5;
+  color: var(--primary-color);
 }
 
 .response-tabs :deep(.el-tabs__active-bar) {
-  background-color: #4f46e5;
+  background-color: var(--primary-color);
 }
 
 .response-tabs :deep(.el-tabs__content) {
   flex: 1;
   overflow: auto;
-}
-
-.response-tabs :deep(.el-tabs__panel) {
   padding: 16px 20px;
 }
 
 .response-body {
-  padding: 16px;
+  min-height: 200px;
+  max-height: calc(100vh - 440px);
   overflow: auto;
-  font-family: 'Consolas', 'Monaco', 'Menlo', monospace;
+  font-family: 'JetBrains Mono', 'Consolas', 'Monaco', monospace;
   font-size: 13px;
   line-height: 1.6;
-  background: #1e293b;
-  color: #e2e8f0;
-  border-radius: 8px;
+  background: #f8fbff;
+  color: #334155;
+  border-radius: 14px;
+  padding: 16px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
 }
 
 .response-body pre {
@@ -202,20 +300,34 @@ function copyResponse() {
   word-break: break-all;
 }
 
-.response-body .empty {
+.empty-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   color: #94a3b8;
+  padding: 32px;
+  background: #f8fbff;
+  border-radius: 14px;
+  border: 1px dashed rgba(148, 163, 184, 0.28);
 }
 
 .response-headers {
-  padding: 0;
+  padding: 8px 0;
 }
 
 .header-row {
   display: flex;
-  gap: 16px;
-  padding: 10px 0;
+  gap: 24px;
+  padding: 12px 14px;
   font-size: 13px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.92);
+  transition: var(--transition);
+  border-radius: 12px;
+}
+
+.header-row:hover {
+  background: #f8fbff;
 }
 
 .header-row:last-child {
@@ -223,20 +335,31 @@ function copyResponse() {
 }
 
 .header-key {
-  font-weight: 500;
-  min-width: 180px;
-  color: #374151;
+  font-weight: 600;
+  min-width: 140px;
+  max-width: 200px;
+  color: var(--text-primary);
+  flex-shrink: 0;
 }
 
 .header-val {
-  color: #6b7280;
+  color: var(--text-secondary);
   word-break: break-all;
+  line-height: 1.5;
+  flex: 1;
+}
+
+.empty-headers {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 
 .empty-assertions {
   padding: 32px;
   text-align: center;
-  color: #9ca3af;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
@@ -248,8 +371,11 @@ function copyResponse() {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 0;
+  padding: 12px 14px;
   font-size: 13px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(226, 232, 240, 0.95);
 }
 
 .assertion-item.pass {

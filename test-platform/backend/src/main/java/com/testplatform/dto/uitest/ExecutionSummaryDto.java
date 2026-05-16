@@ -12,6 +12,8 @@ public class ExecutionSummaryDto {
     private Long id;
     private Long testCaseId;
     private String testCaseName;
+    private Long projectId;
+    private String projectName;
     private Long instanceId;
     private String status;
     private Instant startTime;

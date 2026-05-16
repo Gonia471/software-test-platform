@@ -28,6 +28,8 @@ public class WebConfig {
         List<String> patterns = new ArrayList<>();
         patterns.add("http://localhost:5173");
         patterns.add("http://127.0.0.1:5173");
+        patterns.add("http://localhost:5174");
+        patterns.add("http://127.0.0.1:5174");
         patterns.add("https://*.onrender.com");
         if (StringUtils.hasText(extraPatterns)) {
             patterns.addAll(Arrays.stream(extraPatterns.split(","))

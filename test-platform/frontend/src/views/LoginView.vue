@@ -1,30 +1,55 @@
 <template>
   <div class="login-page">
-    <button type="button" class="dev-enter" @click="quickEnter">
-      直接进入主界面（开发用）
-    </button>
-    <h1>软件测试系统</h1>
-    <form class="form" @submit.prevent="onSubmit">
-      <input
-        v-model="username"
-        type="text"
-        placeholder="用户名"
-        required
-        autocomplete="username"
-      />
-      <input
-        v-model="password"
-        type="password"
-        placeholder="密码"
-        required
-        autocomplete="current-password"
-      />
-      <p v-if="error" class="error">{{ error }}</p>
-      <button type="submit" :disabled="loading">登录</button>
-    </form>
-    <p class="tip">
-      没有账号？ <router-link to="/register">注册</router-link>
-    </p>
+    <button type="button" class="dev-enter" @click="quickEnter">直接进入主界面（开发用）</button>
+    <div class="auth-shell">
+      <section class="auth-intro">
+        <span class="auth-badge">EasyTest</span>
+        <h1 class="auth-intro__title">软件测试平台</h1>
+        <p class="auth-intro__desc">
+          面向毕业设计展示的统一测试工作台，支持组织、项目、API 测试、UI 自动化与报告查看。
+        </p>
+        <div class="auth-feature-list">
+          <div class="auth-feature">
+            <strong>统一入口</strong>
+            <span>一个平台完成项目、接口、UI 与报告管理。</span>
+          </div>
+          <div class="auth-feature">
+            <strong>简洁界面</strong>
+            <span>全站已统一成清爽的蓝灰卡片风格，更适合答辩演示。</span>
+          </div>
+          <div class="auth-feature">
+            <strong>协作测试</strong>
+            <span>支持组织与项目维度的成员协作和测试资源管理。</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="login-card">
+        <div class="login-header">
+          <div class="login-logo">
+            <span class="login-logo-icon">🧪</span>
+          </div>
+          <h1 class="login-title">欢迎回来</h1>
+          <p class="login-subtitle">登录到 EasyTest 软件测试平台</p>
+        </div>
+        <div class="form">
+          <label class="field-label">手机号</label>
+          <input
+            v-model="phone"
+            type="tel"
+            placeholder="请输入手机号"
+            maxlength="11"
+          />
+          <p v-if="error" class="error">{{ error }}</p>
+          <button type="button" class="submit-btn" :disabled="loading" @click="handleLogin">
+            {{ loading ? '登录中...' : '登录' }}
+          </button>
+          <p class="tip">
+            没有收到企业邀请？<router-link to="/register">点击这里，开通企业空间</router-link>
+          </p>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -32,22 +57,25 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
-import { login } from '../api/auth'
+import { loginWithCode } from '../api/auth'
 
 const router = useRouter()
 const userStore = useUserStore()
 
-const username = ref('')
-const password = ref('')
+const phone = ref('')
 const error = ref('')
 const loading = ref(false)
 
-async function onSubmit() {
+async function handleLogin() {
+  if (!phone.value) {
+    error.value = '请输入手机号'
+    return
+  }
   error.value = ''
   loading.value = true
   try {
-    const { data } = await login(username.value, password.value)
-    userStore.setAuth(data.token, data.username)
+    const { data } = await loginWithCode(phone.value)
+    userStore.setAuth(data.token, data.username, data.phone, data.userId, data.isDevMode || false)
     router.push('/')
   } catch (e) {
     error.value = e.response?.data?.message || '登录失败'
@@ -57,7 +85,7 @@ async function onSubmit() {
 }
 
 function quickEnter() {
-  userStore.setAuth('dev-token', '开发模式用户')
+  userStore.setAuth('dev-token', '开发模式用户', '', 1, true)
   router.push('/')
 }
 </script>
@@ -67,52 +95,249 @@ function quickEnter() {
   position: relative;
   min-height: 100vh;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
+  padding: 32px;
+  background:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.18) 0, rgba(59, 130, 246, 0) 32%),
+    radial-gradient(circle at bottom right, rgba(20, 184, 166, 0.16) 0, rgba(20, 184, 166, 0) 30%),
+    linear-gradient(135deg, #eff6ff 0%, #f8fbff 48%, #eef8f7 100%);
+  background-attachment: fixed;
+}
+
+.login-page::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.36) 0%, rgba(255, 255, 255, 0.12) 100%);
+  pointer-events: none;
 }
 
 .dev-enter {
   position: absolute;
-  top: 16px;
-  right: 16px;
+  top: 20px;
+  right: 20px;
   font-size: 12px;
-  padding: 4px 10px;
+  padding: 8px 16px;
   border-radius: 999px;
-  border: 1px solid #d1d5db;
-  background-color: #f9fafb;
-  color: #4b5563;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text-primary);
   cursor: pointer;
+  backdrop-filter: blur(14px);
+  z-index: 2;
 }
 
 .dev-enter:hover {
-  background-color: #e5e7eb;
+  background: #ffffff;
 }
+
+.auth-shell {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(320px, 1.1fr) minmax(340px, 420px);
+  width: min(1100px, 100%);
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+}
+
+.auth-intro {
+  padding: 48px;
+  background: linear-gradient(160deg, #0f172a 0%, #172554 42%, #0f766e 100%);
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.auth-badge {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 18px;
+}
+
+.auth-intro__title {
+  font-size: 38px;
+  line-height: 1.15;
+  margin-bottom: 14px;
+}
+
+.auth-intro__desc {
+  font-size: 15px;
+  line-height: 1.8;
+  color: rgba(255, 255, 255, 0.82);
+  margin-bottom: 28px;
+}
+
+.auth-feature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.auth-feature {
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.auth-feature strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 15px;
+}
+
+.auth-feature span {
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.login-card {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(20px);
+  padding: 48px 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.login-logo {
+  width: 64px;
+  height: 64px;
+  background: var(--primary-gradient);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  box-shadow: 0 14px 32px rgba(59, 130, 246, 0.28);
+}
+
+.login-logo-icon {
+  font-size: 32px;
+  color: #fff;
+}
+
+.login-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.login-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
 .form {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  width: 240px;
+  gap: 14px;
 }
+
+.field-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
 .form input {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #ccc;
-  border-radius: 6px;
+  padding: 14px 16px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 14px;
+  font-size: 14px;
+  background: #f8fbff;
+  transition: var(--transition);
 }
-.form button {
-  padding: 0.5rem;
-  background: #1e293b;
+
+.form input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.08);
+}
+
+.form input::placeholder {
+  color: #9ca3af;
+}
+
+.submit-btn {
+  padding: 14px;
+  background: var(--primary-gradient);
   color: #fff;
   border: none;
-  border-radius: 6px;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 600;
   cursor: pointer;
+  transition: var(--transition);
+  box-shadow: 0 14px 26px rgba(59, 130, 246, 0.24);
 }
-.form button:disabled {
+
+.submit-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+}
+
+.submit-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
-.error { color: #dc2626; font-size: 14px; }
-.tip { font-size: 14px; color: #64748b; }
-.tip a { color: #42b983; }
+
+.error {
+  color: #ef4444;
+  font-size: 13px;
+  text-align: center;
+  padding: 8px;
+  background: #fef2f2;
+  border-radius: 8px;
+}
+
+.tip {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+  margin-top: 8px;
+}
+
+.tip a {
+  color: var(--primary-color);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+@media (max-width: 920px) {
+  .auth-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-intro {
+    display: none;
+  }
+
+  .login-card {
+    padding: 40px 28px;
+  }
+}
 </style>

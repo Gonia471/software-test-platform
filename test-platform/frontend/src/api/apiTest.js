@@ -38,3 +38,23 @@ export function deleteEnvironment(id) {
 export function sendRequest(config) {
   return request.post('/api-test/send', config)
 }
+
+/** 获取 API 测试执行记录列表 */
+export function listApiExecutions(limit = 50) {
+  return request.get('/api-test/executions', { params: { limit } })
+}
+
+/** 获取 API 测试执行详情 */
+export function getApiExecutionDetail(id) {
+  return request.get(`/api-test/executions/${id}`)
+}
+
+/** 保存 API 测试执行记录 */
+export function saveApiExecution(data) {
+  return request.post('/api-test/executions', data)
+}
+
+/** 获取 API 测试执行统计 */
+export function getApiExecutionStatistics() {
+  return request.get('/api-test/executions/statistics')
+}

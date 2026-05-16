@@ -1,106 +1,117 @@
 import { defineStore } from 'pinia'
-import { ref, computed, watch } from 'vue'
-
-const STORAGE_KEYS = {
-  collections: 'api-test-collections-v1',
-  environments: 'api-test-environments-v1',
-  currentEnvId: 'api-test-current-env-v1',
-  requestHistory: 'api-test-request-history-v1',
-}
+import { ref, computed } from 'vue'
+import {
+  getCollections,
+  saveCollection as saveCollectionApi,
+  deleteCollection as deleteCollectionApi,
+  getEnvironments,
+  saveEnvironment as saveEnvironmentApi,
+  deleteEnvironment as deleteEnvironmentApi,
+} from '../api/apiTest'
+import { useOrgStore } from './org'
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']
-
-function loadJson(key, defaultValue = []) {
-  try {
-    const raw = localStorage.getItem(key)
-    if (!raw) return defaultValue
-    const parsed = JSON.parse(raw)
-    return parsed ?? defaultValue
-  } catch {
-    return defaultValue
-  }
-}
-
-function saveJson(key, value) {
-  localStorage.setItem(key, JSON.stringify(value))
-}
-
-function generateId() {
-  return `id-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
-}
+const REQUEST_HISTORY_KEY = 'api-test-request-history-v1'
 
 export const useApiTestStore = defineStore('apiTest', () => {
-  const collections = ref(loadJson(STORAGE_KEYS.collections, [
-    { id: 'root', name: '我的接口', type: 'folder', children: [] },
-  ]))
-
-  const environments = ref(loadJson(STORAGE_KEYS.environments, [
-    { id: 'env-dev', name: '开发环境', variables: [{ key: 'base_url', value: 'http://localhost:8080' }] },
-    { id: 'env-test', name: '测试环境', variables: [{ key: 'base_url', value: 'https://test.example.com' }] },
-  ]))
-
-  const currentEnvId = ref(localStorage.getItem(STORAGE_KEYS.currentEnvId) || environments.value[0]?.id || '')
-
-  const requestHistory = ref(loadJson(STORAGE_KEYS.requestHistory, []))
+  const orgStore = useOrgStore()
+  const rawCollections = ref([])
+  const environments = ref([])
+  const loading = ref(false)
+  const error = ref(null)
 
   const selectedCollectionId = ref(null)
   const selectedCaseId = ref(null)
+  const currentEnvId = ref('')
+  const requestHistory = ref(loadRequestHistory())
 
-  const currentEnv = computed(() =>
-    environments.value.find((e) => e.id === currentEnvId.value) || null,
-  )
-
-  const currentVariables = computed(() => {
-    const env = currentEnv.value
-    if (!env?.variables) return {}
-    return env.variables.reduce((acc, v) => {
-      acc[v.key] = v.value
-      return acc
-    }, {})
-  })
-
-  function resolveVariables(str) {
-    if (!str || typeof str !== 'string') return str
-    return str.replace(/\{\{(\w+)\}\}/g, (_, key) => currentVariables.value[key] ?? `{{${key}}}`)
-  }
-
-  function setCurrentEnv(id) {
-    currentEnvId.value = id
-    localStorage.setItem(STORAGE_KEYS.currentEnvId, id)
-  }
-
-  function addEnvironment(name = '新环境') {
-    const env = {
-      id: generateId(),
-      name,
-      variables: [{ key: 'base_url', value: '' }],
+  function normalizeEnvironment(env) {
+    if (!env || typeof env !== 'object') {
+      return {
+        id: String(Date.now()),
+        name: '未命名环境',
+        variables: [],
+      }
     }
-    environments.value.push(env)
-    saveJson(STORAGE_KEYS.environments, environments.value)
-    return env
-  }
-
-  function updateEnvironment(id, payload) {
-    const idx = environments.value.findIndex((e) => e.id === id)
-    if (idx === -1) return
-    environments.value[idx] = { ...environments.value[idx], ...payload }
-    saveJson(STORAGE_KEYS.environments, environments.value)
-  }
-
-  function removeEnvironment(id) {
-    environments.value = environments.value.filter((e) => e.id !== id)
-    if (currentEnvId.value === id) {
-      currentEnvId.value = environments.value[0]?.id || ''
+    return {
+      ...env,
+      id: String(env.id ?? Date.now()),
+      name: env.name || '未命名环境',
+      variables: Array.isArray(env.variables)
+        ? env.variables.map((variable) => ({
+            key: variable.key || '',
+            value: variable.value || '',
+          }))
+        : [],
     }
-    saveJson(STORAGE_KEYS.environments, environments.value)
   }
 
-  function addCollection(parentId, name = '新集合', type = 'folder') {
+  // 从后端API获取集合列表
+  async function fetchCollections() {
+    loading.value = true
+    error.value = null
+    try {
+      const response = await getCollections()
+      const collectionList = extractResponseData(response)
+      // 统一转换 nodeType 为 type，方便前端组件使用
+      const mapNode = (node) => ({
+        ...node,
+        type: node.nodeType?.toLowerCase(),
+        children: node.children ? node.children.map(mapNode) : []
+      })
+      rawCollections.value = (Array.isArray(collectionList) ? collectionList : []).map(mapNode)
+    } catch (err) {
+      error.value = err.message || '获取集合列表失败'
+      console.error('获取API测试集合失败:', err)
+      rawCollections.value = []
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function fetchEnvironments() {
+    loading.value = true
+    error.value = null
+    try {
+      const response = await getEnvironments()
+      const environmentList = extractResponseData(response)
+      environments.value = (Array.isArray(environmentList) ? environmentList : []).map(normalizeEnvironment)
+      if (!currentEnvId.value && environments.value.length > 0) {
+        currentEnvId.value = environments.value[0].id
+      }
+    } catch (err) {
+      error.value = err.message || '获取环境列表失败'
+      console.error('获取API测试环境失败:', err)
+      environments.value = []
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 添加或更新集合
+  async function saveCollection(data) {
+    loading.value = true
+    error.value = null
+    try {
+      const response = await saveCollectionApi(data)
+      // 保存成功后重新获取列表
+      await fetchCollections()
+      return extractResponseData(response)
+    } catch (err) {
+      error.value = err.message || '保存集合失败'
+      console.error('保存API测试集合失败:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 添加集合（简化版）
+  async function addCollection(parentId, name = '新集合', type = 'folder') {
     const item = {
-      id: generateId(),
-      parentId: parentId || 'root',
+      parentId: parentId || null,
       name,
-      type,
+      nodeType: type.toUpperCase(), // 发送给后端使用 nodeType
       children: type === 'folder' ? [] : undefined,
       method: type === 'case' ? 'GET' : undefined,
       url: type === 'case' ? '' : undefined,
@@ -111,18 +122,39 @@ export const useApiTestStore = defineStore('apiTest', () => {
       authType: type === 'case' ? 'none' : undefined,
       authConfig: type === 'case' ? {} : undefined,
       assertions: type === 'case' ? [] : undefined,
+      // 设置组织ID，使用当前选择的组织或第一个有权限的组织
+      organizationId: orgStore.currentOrganizationId || (orgStore.organizations[0]?.id || null)
     }
-    const parent = findNodeById(collections.value, parentId || 'root')
-    if (parent && parent.children) {
-      parent.children = parent.children || []
-      parent.children.push(item)
-    } else {
-      collections.value.push(item)
-    }
-    saveCollections()
-    return item
+    return await saveCollection(item)
   }
 
+  // 更新集合
+  async function updateCollection(id, payload) {
+    const node = findNodeById(rawCollections.value, id)
+    if (!node) return null
+    
+    const updatedData = { ...node, ...payload }
+    return await saveCollection(updatedData)
+  }
+
+  // 删除集合
+  async function removeCollection(id) {
+    loading.value = true
+    error.value = null
+    try {
+      await deleteCollectionApi(id)
+      // 删除成功后重新获取列表
+      await fetchCollections()
+    } catch (err) {
+      error.value = err.message || '删除集合失败'
+      console.error('删除API测试集合失败:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 查找节点
   function findNodeById(nodes, id) {
     if (!nodes) return null
     for (const n of nodes) {
@@ -133,59 +165,161 @@ export const useApiTestStore = defineStore('apiTest', () => {
     return null
   }
 
-  function saveCollections() {
-    saveJson(STORAGE_KEYS.collections, collections.value)
+  // 设置当前选中的集合
+  function setSelectedCollection(id) {
+    selectedCollectionId.value = id
   }
 
-  function updateCollection(id, payload) {
-    const node = findNodeById(collections.value, id)
-    if (!node) return
-    Object.assign(node, payload)
-    saveCollections()
+  // 设置当前选中的用例
+  function setSelectedCase(id) {
+    selectedCaseId.value = id
   }
 
-  function removeCollection(id) {
-    const removeFrom = (nodes, parent) => {
-      if (!nodes) return
-      for (let i = 0; i < nodes.length; i++) {
-        if (nodes[i].id === id) {
-          nodes.splice(i, 1)
-          return true
-        }
-        if (removeFrom(nodes[i].children, nodes[i])) return true
-      }
-      return false
+  function setCurrentEnv(id) {
+    currentEnvId.value = id ? String(id) : ''
+  }
+
+  const collections = computed(() => {
+    const currentOrgId = orgStore.currentOrganizationId ? Number(orgStore.currentOrganizationId) : null
+    if (!currentOrgId) {
+      return []
     }
-    removeFrom(collections.value)
-    saveCollections()
+    return filterCollectionsByOrganization(rawCollections.value, currentOrgId)
+  })
+
+  async function addEnvironment() {
+    const payload = {
+      name: `新环境 ${environments.value.length + 1}`,
+      variables: [],
+    }
+    const response = await saveEnvironmentApi(payload)
+    let env = normalizeEnvironment(extractResponseData(response))
+    if (!env.id || env.id === 'undefined') {
+      await fetchEnvironments()
+      env = environments.value[environments.value.length - 1] || normalizeEnvironment(payload)
+    } else {
+      environments.value.push(env)
+    }
+    currentEnvId.value = env.id
+    return env
+  }
+
+  async function updateEnvironment(id, payload) {
+    const current = environments.value.find((env) => env.id === String(id))
+    if (!current) return null
+    const response = await saveEnvironmentApi({
+      ...current,
+      ...payload,
+      id: Number(id),
+    })
+    const nextEnv = normalizeEnvironment(extractResponseData(response))
+    const index = environments.value.findIndex((env) => env.id === String(id))
+    if (index !== -1) {
+      environments.value.splice(index, 1, nextEnv)
+    }
+    return nextEnv
+  }
+
+  async function removeEnvironment(id) {
+    await deleteEnvironmentApi(id)
+    environments.value = environments.value.filter((env) => env.id !== String(id))
+    if (currentEnvId.value === String(id)) {
+      currentEnvId.value = environments.value[0]?.id || ''
+    }
+  }
+
+  const currentEnvironment = computed(() =>
+    environments.value.find((env) => env.id === currentEnvId.value) || null,
+  )
+
+  function resolveVariables(input) {
+    if (typeof input !== 'string' || !input) return input
+    const variableMap = Object.fromEntries(
+      (currentEnvironment.value?.variables || [])
+        .filter((variable) => variable.key)
+        .map((variable) => [variable.key, variable.value ?? '']),
+    )
+    return input.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, rawKey) => {
+      const key = String(rawKey).trim()
+      return Object.prototype.hasOwnProperty.call(variableMap, key)
+        ? String(variableMap[key])
+        : `{{${key}}}`
+    })
   }
 
   function addRequestToHistory(record) {
-    const max = 50
-    requestHistory.value = [record, ...requestHistory.value.slice(0, max - 1)]
-    saveJson(STORAGE_KEYS.requestHistory, requestHistory.value)
+    if (!record?.url) return
+    const nextHistory = [record, ...requestHistory.value.filter((item) => item.url !== record.url || item.method !== record.method)]
+      .slice(0, 20)
+    requestHistory.value = nextHistory
+    localStorage.setItem(REQUEST_HISTORY_KEY, JSON.stringify(nextHistory))
   }
 
   return {
     HTTP_METHODS,
     collections,
+    rawCollections,
     environments,
-    currentEnvId,
-    currentEnv,
-    currentVariables,
-    requestHistory,
+    loading,
+    error,
     selectedCollectionId,
     selectedCaseId,
-    resolveVariables,
+    currentEnvId,
+    currentEnvironment,
+    requestHistory,
+    fetchCollections,
+    fetchEnvironments,
+    saveCollection,
+    addCollection,
+    updateCollection,
+    removeCollection,
+    findNodeById,
+    setSelectedCollection,
+    setSelectedCase,
     setCurrentEnv,
     addEnvironment,
     updateEnvironment,
     removeEnvironment,
-    addCollection,
-    findNodeById,
-    updateCollection,
-    removeCollection,
-    saveCollections,
+    resolveVariables,
     addRequestToHistory,
   }
 })
+
+function filterCollectionsByOrganization(nodes, organizationId) {
+  if (!Array.isArray(nodes) || !organizationId) {
+    return []
+  }
+
+  return nodes
+    .map((node) => {
+      const children = filterCollectionsByOrganization(node.children || [], organizationId)
+      const matched = Number(node.organizationId) === Number(organizationId)
+      if (!matched && children.length === 0) {
+        return null
+      }
+      return {
+        ...node,
+        children,
+      }
+    })
+    .filter(Boolean)
+}
+
+function loadRequestHistory() {
+  try {
+    const raw = localStorage.getItem(REQUEST_HISTORY_KEY)
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function extractResponseData(response) {
+  if (!response) return null
+  const payload = response.data
+  if (payload && typeof payload === 'object' && 'data' in payload) {
+    return payload.data
+  }
+  return payload
+}

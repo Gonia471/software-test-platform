@@ -101,7 +101,7 @@ public class UiTestExecutionEngine {
                 try {
                     StepResult result = stepDispatcher.dispatch(step, ctx);
                     fillStepSuccess(stepRecord, result);
-                    // 每步快照：步骤执行完成后的页面状态（答辩/报告展示用）
+                    // 每步快照：步骤执行完成后的页面状态
                     if (driver instanceof TakesScreenshot ts && options.isScreenshotEveryStep()) {
                         try {
                             String path = saveScreenshot(ts, screenshotRoot, i + 1);
@@ -110,14 +110,20 @@ public class UiTestExecutionEngine {
                             log.warn("[UI执行] 步骤 {} 快照失败: {}", i + 1, shotEx.getMessage());
                         }
                     }
+                    // 确保截图路径被立即保存到数据库
+                    stepRepository.save(stepRecord);
                 } catch (Exception e) {
                     String msg = e.getMessage() != null ? e.getMessage() : e.toString();
                     stepRecord.setStatus("FAILED");
                     stepRecord.setErrorMessage(msg);
                     // 失败时截图
                     if (options.isScreenshotOnFailure() && driver instanceof TakesScreenshot ts) {
-                        String path = saveScreenshot(ts, screenshotRoot, i + 1);
-                        stepRecord.setScreenshotPath(path);
+                        try {
+                            String path = saveScreenshot(ts, screenshotRoot, i + 1);
+                            stepRecord.setScreenshotPath(path);
+                        } catch (Exception shotEx) {
+                            log.warn("[UI执行] 失败快照失败: {}", shotEx.getMessage());
+                        }
                     }
                     stepRecord.setEndTime(Instant.now());
                     stepRepository.save(stepRecord);
@@ -127,10 +133,10 @@ public class UiTestExecutionEngine {
                     if (options.isStopOnFailure()) {
                         break;
                     } else {
-                        // 不中断后续步骤，但保留失败状态
                         continue;
                     }
                 }
+                // 再次确保保存（虽然在 try/catch 内部已有保存，此处作为双重保险）
                 stepRepository.save(stepRecord);
             }
 

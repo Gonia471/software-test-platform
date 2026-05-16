@@ -18,5 +18,6 @@ public class ExecutionStepDto {
     private String errorMessage;
     private String screenshotUrl;
     private String logText;
+    private String rawStepJson;
 }
 

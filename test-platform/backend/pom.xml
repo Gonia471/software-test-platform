@@ -95,6 +95,12 @@
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Jython: 嵌入式 Python 引擎，已移除（改用外部 python3 进程执行）
+        <dependency>
+            <groupId>org.python</groupId>
+            <artifactId>jython</artifactId>
+            <version>2.7.4</version>
+        </dependency> -->
     </dependencies>
 
     <build>

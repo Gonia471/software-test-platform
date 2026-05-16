@@ -57,6 +57,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { ElMessageBox } from 'element-plus'
 import { Folder, Document, ArrowDown, ArrowRight, MoreFilled } from '@element-plus/icons-vue'
 
 const props = defineProps({
@@ -110,15 +111,36 @@ function handleClick() {
   }
 }
 
-function handleCommand(cmd, node) {
+async function handleCommand(cmd, node) {
   if (cmd === 'add-folder') emit('add-folder', node.id)
   else if (cmd === 'add-case') emit('add-case', node.id)
   else if (cmd === 'rename') {
-    const name = prompt('请输入新名称', node.name)
-    if (name) emit('rename', node.id, name)
+    try {
+      const { value } = await ElMessageBox.prompt('请输入新的节点名称', '重命名', {
+        inputValue: node.name,
+        confirmButtonText: '保存',
+        cancelButtonText: '取消',
+        inputPattern: /\S+/,
+        inputErrorMessage: '名称不能为空',
+      })
+      if (value && value.trim() && value.trim() !== node.name) {
+        emit('rename', node.id, value.trim())
+      }
+    } catch {
+      // ignore cancel
+    }
   }
   else if (cmd === 'delete') {
-    if (confirm(`确定删除「${node.name}」？`)) emit('delete', node.id)
+    try {
+      await ElMessageBox.confirm(`确定删除「${node.name}」？删除后无法恢复。`, '删除确认', {
+        type: 'warning',
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+      })
+      emit('delete', node.id)
+    } catch {
+      // ignore cancel
+    }
   }
 }
 </script>
@@ -126,33 +148,43 @@ function handleCommand(cmd, node) {
 <style scoped>
 .tree-node {
   font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .tree-node-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  border-radius: 6px;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 14px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: var(--transition);
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .tree-node-row:hover {
-  background: #f3f4f6;
+  background: #ffffff;
+  border-color: rgba(226, 232, 240, 0.95);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.05);
 }
 
 .tree-node-row.is-selected {
-  background: #eff6ff;
-  color: #2563eb;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  color: var(--primary-color);
+  border-color: rgba(59, 130, 246, 0.25);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
 }
 
 .node-expand {
-  width: 18px;
+  width: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
+  color: var(--text-secondary);
 }
 
 .node-expand-placeholder {
@@ -175,17 +207,23 @@ function handleCommand(cmd, node) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--text-primary);
+  font-weight: 500;
 }
 
 .node-method {
   font-size: 11px;
-  color: #6b7280;
-  font-weight: 500;
+  color: var(--text-secondary);
+  font-weight: 700;
+  background: #f8fbff;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
 }
 
 .node-actions {
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity 0.2s;
 }
 
 .tree-node-row:hover .node-actions {
@@ -193,8 +231,8 @@ function handleCommand(cmd, node) {
 }
 
 .tree-node-children {
-  margin-left: 20px;
-  border-left: 1px dashed #e5e7eb;
-  padding-left: 4px;
+  margin-left: 24px;
+  border-left: 1px dashed rgba(148, 163, 184, 0.28);
+  padding-left: 8px;
 }
 </style>

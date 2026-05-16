@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useUserStore } from '../stores/user'
 
 const routes = [
   {
@@ -28,6 +29,11 @@ const routes = [
         component: () => import('../views/DashboardView.vue'),
       },
       {
+        path: 'organizations',
+        name: 'Organizations',
+        component: () => import('../views/OrganizationsView.vue'),
+      },
+      {
         path: 'projects',
         name: 'Projects',
         component: () => import('../views/ProjectsView.vue'),
@@ -53,6 +59,11 @@ const routes = [
         component: () => import('../views/ReportsView.vue'),
       },
       {
+        path: 'profile',
+        name: 'Profile',
+        component: () => import('../views/ProfileView.vue'),
+      },
+      {
         path: 'settings',
         name: 'Settings',
         component: () => import('../views/SettingsView.vue'),
@@ -71,12 +82,31 @@ function routeRequiresAuth(to) {
 }
 
 router.beforeEach((to, from, next) => {
+  const userStore = useUserStore()
   let token = localStorage.getItem('token')
 
   // 开发/演示：未登录时注入占位 token，避免本地与演示环境白屏卡死
   if (routeRequiresAuth(to) && !token) {
     localStorage.setItem('token', 'dev-token')
     localStorage.setItem('username', '开发模式用户')
+    token = 'dev-token'
+  }
+
+  // 同步 Pinia 状态
+  if (token && !userStore.token) {
+    userStore.setAuth(
+      token,
+      localStorage.getItem('username') || '开发模式用户',
+      localStorage.getItem('phone') || '',
+      localStorage.getItem('userId') || 1,
+      token === 'dev-token'
+    )
+  }
+
+  // 如果已登录但访问登录页，跳转到首页
+  if (to.path === '/login' && token) {
+    next('/')
+    return
   }
 
   next()

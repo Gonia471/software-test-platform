@@ -38,21 +38,21 @@ public class WaitStepHandler implements StepHandler {
             }
             case "waitVisible" -> {
                 int timeout = ((Number) params.getOrDefault("timeout", 10)).intValue();
-                By locator = LocatorSupport.buildLocator(params);
+                By locator = LocatorSupport.buildLocator(params, driver);
                 new WebDriverWait(driver, Duration.ofSeconds(timeout))
                         .until(ExpectedConditions.visibilityOfElementLocated(locator));
                 return StepResult.success("等待元素可见");
             }
             case "waitClickable" -> {
                 int timeout = ((Number) params.getOrDefault("timeout", 10)).intValue();
-                By locator = LocatorSupport.buildLocator(params);
+                By locator = LocatorSupport.buildLocator(params, driver);
                 new WebDriverWait(driver, Duration.ofSeconds(timeout))
                         .until(ExpectedConditions.elementToBeClickable(locator));
                 return StepResult.success("等待元素可点击");
             }
             case "waitDisappear" -> {
                 int timeout = ((Number) params.getOrDefault("timeout", 10)).intValue();
-                By locator = LocatorSupport.buildLocator(params);
+                By locator = LocatorSupport.buildLocator(params, driver);
                 new WebDriverWait(driver, Duration.ofSeconds(timeout))
                         .until(ExpectedConditions.invisibilityOfElementLocated(locator));
                 return StepResult.success("等待元素消失");

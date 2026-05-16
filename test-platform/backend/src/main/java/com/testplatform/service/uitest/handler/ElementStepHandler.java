@@ -24,7 +24,7 @@ public class ElementStepHandler implements StepHandler {
     public StepResult execute(StepDefinition step, ExecutionContext ctx) {
         WebDriver driver = ctx.getDriver();
         Map<String, Object> params = step.getParameters();
-        By locator = LocatorSupport.buildLocator(params);
+        By locator = LocatorSupport.buildLocator(params, driver);
         WebElement el = driver.findElement(locator);
 
         String action = step.getAction();

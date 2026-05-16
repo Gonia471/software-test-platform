@@ -37,6 +37,7 @@ public class UiTestExecutionService {
     private final UiTestExecutionRepository executionRepository;
     private final UiExecutionStepRepository stepRepository;
     private final UiTestCaseRepository testCaseRepository;
+    private final com.testplatform.repository.ProjectRepository projectRepository;
     private final ExecutionInstanceService instanceService;
     private final UiTestExecutionEngine executionEngine;
     private final ObjectMapper objectMapper;
@@ -44,12 +45,14 @@ public class UiTestExecutionService {
     public UiTestExecutionService(UiTestExecutionRepository executionRepository,
                                   UiExecutionStepRepository stepRepository,
                                   UiTestCaseRepository testCaseRepository,
+                                  com.testplatform.repository.ProjectRepository projectRepository,
                                   ExecutionInstanceService instanceService,
                                   UiTestExecutionEngine executionEngine,
                                   ObjectMapper objectMapper) {
         this.executionRepository = executionRepository;
         this.stepRepository = stepRepository;
         this.testCaseRepository = testCaseRepository;
+        this.projectRepository = projectRepository;
         this.instanceService = instanceService;
         this.executionEngine = executionEngine;
         this.objectMapper = objectMapper;
@@ -73,6 +76,7 @@ public class UiTestExecutionService {
         UiTestExecution execution = new UiTestExecution();
         execution.setTestCaseId(req.getTestCaseId());
         execution.setInstanceId(req.getInstanceId());
+        execution.setProjectId(req.getProjectId());
         execution.setStatus("PENDING");
         execution.setOptionsJson(writeOptions(options));
         execution.setCreatedAt(Instant.now());
@@ -132,12 +136,18 @@ public class UiTestExecutionService {
         dto.setId(e.getId());
         dto.setTestCaseId(e.getTestCaseId());
         dto.setInstanceId(e.getInstanceId());
+        dto.setProjectId(e.getProjectId());
         dto.setStatus(e.getStatus());
         dto.setStartTime(e.getStartTime());
         dto.setEndTime(e.getEndTime());
         dto.setCreatedAt(e.getCreatedAt());
         Optional<UiTestCase> tc = testCaseRepository.findById(e.getTestCaseId());
         dto.setTestCaseName(tc.map(UiTestCase::getName).orElse("（已删除用例）"));
+        
+        if (e.getProjectId() != null) {
+            projectRepository.findById(e.getProjectId()).ifPresent(p -> dto.setProjectName(p.getName()));
+        }
+        
         return dto;
     }
 
@@ -185,9 +195,12 @@ public class UiTestExecutionService {
         dto.setEndTime(step.getEndTime());
         dto.setErrorMessage(step.getErrorMessage());
         dto.setLogText(step.getLogText());
-        if (step.getScreenshotPath() != null && !step.getScreenshotPath().isBlank()) {
-            dto.setScreenshotUrl("/api/ui-test/executions/" + executionId + "/screenshots/" + step.getStepIndex());
-        }
+        dto.setRawStepJson(step.getRawStepJson());
+        
+        // 原始实现逻辑：只要步骤已执行，就生成截图 URL，由 Controller 负责磁盘文件检索
+        // 这样可以规避数据库字段保存延迟导致的前端不显示问题
+        dto.setScreenshotUrl("/api/ui-test/executions/" + executionId + "/screenshots/" + step.getStepIndex());
+        
         return dto;
     }
 }

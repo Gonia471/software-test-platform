@@ -1,7 +1,10 @@
 <template>
   <div class="api-collection-tree">
     <div class="tree-header">
-      <span class="tree-title">接口集合</span>
+      <div class="tree-header__main">
+        <span class="tree-title">接口集合</span>
+        <span class="tree-subtitle">按目录组织接口，支持快速搜索与环境管理</span>
+      </div>
       <div class="tree-actions">
         <el-dropdown trigger="click" @command="handleAdd">
           <el-button type="primary" size="small" :icon="Plus">
@@ -86,9 +89,9 @@ const filteredRoots = computed(() => {
 
 function handleAdd(cmd) {
   if (cmd === 'folder') {
-    emit('add-folder', 'root')
+    emit('add-folder', null)
   } else {
-    emit('add-case', 'root')
+    emit('add-case', null)
   }
 }
 
@@ -118,38 +121,52 @@ function onDelete(id) {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #fff;
-  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.92) 0%, rgba(255, 255, 255, 0.98) 100%);
+  border-radius: var(--border-radius);
   overflow: hidden;
 }
 
 .tree-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid #e5e7eb;
+  gap: 12px;
+  padding: 18px 18px 16px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.92);
+  background: linear-gradient(135deg, #fbfdff 0%, #f3f8ff 100%);
+}
+
+.tree-header__main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .tree-title {
   font-weight: 600;
   font-size: 15px;
-  color: #111827;
+  color: var(--text-primary);
+}
+
+.tree-subtitle {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
 }
 
 .tree-actions {
   display: flex;
-  gap: 6px;
+  gap: 8px;
 }
 
 .tree-search {
-  padding: 12px 16px;
-  border-bottom: 1px solid #f3f4f6;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.92);
 }
 
 .tree-body {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 16px;
+  padding: 14px;
 }
 </style>

@@ -9,6 +9,7 @@ public class StartExecutionRequest {
 
     private Long testCaseId;
     private Long instanceId;
+    private Long projectId;
 
     private boolean headless = true;
     private boolean stopOnFailure = false;

@@ -1,5 +1,15 @@
 import request from './request'
 
+/** 获取用例列表 */
+export function getCases() {
+  return request.get('/ui-test/test-cases')
+}
+
+/** 获取指定组织下的用例列表 */
+export function getCasesByOrganization(orgId) {
+  return request.get(`/ui-test/test-cases/organization/${orgId}`)
+}
+
 /** 创建用例 */
 export function createCase(data) {
   return request.post('/ui-test/test-cases', data)
@@ -15,9 +25,33 @@ export function getCase(id) {
   return request.get(`/ui-test/test-cases/${id}`)
 }
 
+/** 删除用例 */
+export function deleteCase(id) {
+  return request.delete(`/ui-test/test-cases/${id}`)
+}
+
 /** 获取执行实例列表 */
 export function getInstances() {
   return request.get('/ui-test/instances')
+}
+
+/** XPath 快速预览 */
+export function previewXpathFast(xpath) {
+  return request.get('/ui-test/xpath/preview', {
+    params: { xpath },
+  })
+}
+
+/** XPath 上下文预览 */
+export async function previewXpathWithContext(data) {
+  try {
+    return await request.post('/ui-test/xpath/preview', data)
+  } catch (error) {
+    if (data?.xpath) {
+      return previewXpathFast(data.xpath)
+    }
+    throw error
+  }
 }
 
 /** 启动执行 */

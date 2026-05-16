@@ -64,7 +64,7 @@
           />
         </el-form-item>
 
-        <template v-if="step.action === 'openPage'">
+        <template v-if="activeActionKey === 'openPage'">
           <el-form-item label="URL">
             <el-input
               v-model="localStep.parameters.url"
@@ -87,7 +87,7 @@
             'waitDisappear',
             'assertElementExist',
             'assertElementVisible',
-          ].includes(step.action)"
+          ].includes(activeActionKey)"
         >
           <el-form-item label="定位方式">
             <el-select
@@ -107,12 +107,55 @@
             <el-input
               v-model="localStep.parameters.locatorValue"
               placeholder="如：#login-button 或 //button[text()='登录']"
-              @change="emitChange"
+              @change="onLocatorChange"
+              @input="onLocatorInput"
             />
+          </el-form-item>
+          <div
+            v-if="showXpathPreview"
+            class="xpath-preview"
+          >
+            <div class="preview-header">
+              <span class="preview-title">XPath 优化预览</span>
+              <el-tag :type="xpathPreview.isAbsolute === 'true' ? 'warning' : 'success'" size="small">
+                {{ xpathPreview.isAbsolute === 'true' ? '绝对路径' : '相对路径' }}
+              </el-tag>
+            </div>
+            <div class="preview-compare">
+              <div class="preview-item">
+                <div class="preview-label">原始路径</div>
+                <div class="preview-value original">{{ xpathPreview.original }}</div>
+              </div>
+              <div class="preview-arrow">→</div>
+              <div class="preview-item">
+                <div class="preview-label">优化后</div>
+                <div class="preview-value optimized">{{ xpathPreview.optimized }}</div>
+              </div>
+            </div>
+            <div class="preview-info">
+              提取元素：{{ xpathPreview.elementName }}
+            </div>
+            <div v-if="xpathPreview.message" class="preview-info preview-info--hint">
+              {{ xpathPreview.message }}
+            </div>
+          </div>
+          <el-form-item
+            v-if="localStep.parameters.locatorType === 'xpath'"
+            label="优化 XPath"
+          >
+            <el-switch
+              v-model="localStep.parameters.optimizeXpath"
+              active-text="启用"
+              inactive-text="禁用"
+              @change="onOptimizeXpathChange"
+            />
+            <div class="xpath-tip">
+              启用后，系统会自动将绝对路径优化为更简洁的相对定位
+            </div>
           </el-form-item>
 
           <el-form-item
-            v-if="step.action === 'inputText'"
+            v-if="activeActionKey === 'inputText'"
             label="输入内容"
           >
             <el-input
@@ -122,7 +165,7 @@
             />
           </el-form-item>
 
-          <template v-if="step.action === 'selectOption'">
+          <template v-if="activeActionKey === 'selectOption'">
             <el-form-item label="选项类型">
               <el-select
                 v-model="localStep.parameters.optionType"
@@ -143,7 +186,7 @@
           </template>
 
           <el-form-item
-            v-if="['waitVisible', 'waitClickable', 'waitDisappear'].includes(step.action)"
+            v-if="['waitVisible', 'waitClickable', 'waitDisappear'].includes(activeActionKey)"
             label="超时时间（秒）"
           >
             <el-input-number
@@ -155,7 +198,7 @@
           </el-form-item>
 
           <el-form-item
-            v-if="['assertElementExist', 'assertElementVisible'].includes(step.action)"
+            v-if="['assertElementExist', 'assertElementVisible'].includes(activeActionKey)"
             label="预期结果"
           >
             <el-radio-group
@@ -168,7 +211,7 @@
           </el-form-item>
         </template>
 
-        <template v-else-if="step.action === 'sleep'">
+        <template v-else-if="activeActionKey === 'sleep'">
           <el-form-item label="等待时间（秒）">
             <el-input-number
               v-model="localStep.parameters.seconds"
@@ -179,7 +222,7 @@
           </el-form-item>
         </template>
 
-        <template v-else-if="step.action === 'assertTitle'">
+        <template v-else-if="activeActionKey === 'assertTitle'">
           <el-form-item label="预期标题">
             <el-input
               v-model="localStep.parameters.expected"
@@ -189,7 +232,7 @@
           </el-form-item>
         </template>
 
-        <template v-else-if="step.action === 'assertUrl'">
+        <template v-else-if="activeActionKey === 'assertUrl'">
           <el-form-item label="预期 URL">
             <el-input
               v-model="localStep.parameters.expected"
@@ -199,7 +242,7 @@
           </el-form-item>
         </template>
 
-        <template v-else-if="step.action === 'assertTextContains'">
+        <template v-else-if="activeActionKey === 'assertTextContains'">
           <el-form-item label="预期文本">
             <el-input
               v-model="localStep.parameters.expectedText"
@@ -211,7 +254,7 @@
           </el-form-item>
         </template>
 
-        <template v-else-if="step.action === 'aiNaturalLanguage'">
+        <template v-else-if="activeActionKey === 'aiNaturalLanguage'">
           <el-form-item label="自然语言指令">
             <el-input
               v-model="localStep.parameters.instruction"
@@ -223,7 +266,7 @@
           </el-form-item>
         </template>
 
-        <template v-else-if="step.action === 'aiImageClick'">
+        <template v-else-if="activeActionKey === 'aiImageClick'">
           <el-form-item label="上传截图">
             <el-upload
               class="upload"
@@ -270,6 +313,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { locatorOptions, actionGroups, createStepFromAction } from '../../views/uiTestActions'
+import { previewXpathFast, previewXpathWithContext } from '../../api/uiTest'
 
 const props = defineProps({
   step: {
@@ -283,6 +327,10 @@ const props = defineProps({
   total: {
     type: Number,
     default: 0,
+  },
+  pageUrl: {
+    type: String,
+    default: '',
   },
 })
 
@@ -299,28 +347,184 @@ const localStep = reactive({
 const displayOrder = ref(1)
 const selectedGroupType = ref('')
 const selectedActionKey = ref('')
+const xpathPreview = ref(null)
+let xpathPreviewTimer = null
+let xpathPreviewRequestId = 0
 
 const currentActions = computed(() => {
   const group = actionGroups.find((g) => g.type === selectedGroupType.value)
   return group ? group.actions : []
 })
 
+const activeActionKey = computed(() =>
+  localStep.action || selectedActionKey.value || props.step?.action || '',
+)
+
+const showXpathPreview = computed(() => (
+  localStep.parameters?.locatorType === 'xpath'
+  && Boolean(String(localStep.parameters?.locatorValue || '').trim())
+  && Boolean(xpathPreview.value)
+))
+
+function setPreviewIfCurrent(requestId, preview) {
+  if (requestId !== xpathPreviewRequestId) {
+    return false
+  }
+  xpathPreview.value = preview
+  return true
+}
+
+async function fetchFastXpathPreview(xpath, requestId = ++xpathPreviewRequestId) {
+  if (!xpath || xpath.length < 5) {
+    xpathPreview.value = null
+    return null
+  }
+  try {
+    const response = await previewXpathFast(xpath)
+    const result = response.data || null
+    setPreviewIfCurrent(requestId, result)
+    return result
+  } catch (e) {
+    console.warn('Fast XPath preview fetch failed:', e)
+  }
+  return null
+}
+
+async function fetchContextXpathPreview(xpath, originalXpath, requestId = xpathPreviewRequestId) {
+  if (!props.pageUrl) {
+    return null
+  }
+  try {
+    const response = await previewXpathWithContext({
+      xpath,
+      pageUrl: props.pageUrl || '',
+    })
+    const result = response.data || null
+    if (!result || requestId !== xpathPreviewRequestId) {
+      return result
+    }
+
+    const normalized = {
+      ...result,
+      original: originalXpath || result.original || xpath,
+      optimized: result.optimized || xpath,
+    }
+    xpathPreview.value = normalized
+    return normalized
+  } catch (e) {
+    console.warn('Context XPath preview fetch failed:', e)
+  }
+  return null
+}
+
+async function applyOptimizedXpath(xpath, forceApply = false) {
+  const requestId = ++xpathPreviewRequestId
+  const originalXpath = xpath
+  const preview = await fetchFastXpathPreview(xpath, requestId)
+  if (!preview) {
+    emitChange()
+    return
+  }
+
+  const optimized = preview.optimized || xpath
+  if (requestId !== xpathPreviewRequestId) {
+    return
+  }
+
+  xpathPreview.value = {
+    ...preview,
+    original: originalXpath,
+    optimized,
+  }
+
+  if ((forceApply || localStep.parameters.optimizeXpath) && optimized && optimized !== localStep.parameters.locatorValue) {
+    localStep.parameters.locatorValue = optimized
+  }
+  emitChange()
+
+  const refined = await fetchContextXpathPreview(originalXpath, originalXpath, requestId)
+  if (!refined || requestId !== xpathPreviewRequestId) {
+    return
+  }
+
+  if ((forceApply || localStep.parameters.optimizeXpath) && refined.optimized && refined.optimized !== localStep.parameters.locatorValue) {
+    localStep.parameters.locatorValue = refined.optimized
+    emitChange()
+  }
+}
+
+function onLocatorInput() {
+  if (localStep.parameters.locatorType === 'xpath') {
+    if (xpathPreviewTimer) clearTimeout(xpathPreviewTimer)
+    xpathPreviewTimer = setTimeout(async () => {
+      if (localStep.parameters.optimizeXpath) {
+        await applyOptimizedXpath(localStep.parameters.locatorValue)
+        return
+      }
+      const requestId = ++xpathPreviewRequestId
+      await fetchFastXpathPreview(localStep.parameters.locatorValue, requestId)
+      await fetchContextXpathPreview(localStep.parameters.locatorValue, localStep.parameters.locatorValue, requestId)
+    }, 300)
+  }
+}
+
+async function onLocatorChange() {
+  if (localStep.parameters.locatorType === 'xpath') {
+    if (localStep.parameters.optimizeXpath) {
+      await applyOptimizedXpath(localStep.parameters.locatorValue)
+      return
+    }
+    const requestId = ++xpathPreviewRequestId
+    await fetchFastXpathPreview(localStep.parameters.locatorValue, requestId)
+    await fetchContextXpathPreview(localStep.parameters.locatorValue, localStep.parameters.locatorValue, requestId)
+  } else {
+    xpathPreviewRequestId += 1
+    xpathPreview.value = null
+  }
+  emitChange()
+}
+
+async function onOptimizeXpathChange(enabled) {
+  if (!enabled) {
+    emitChange()
+    return
+  }
+  if (localStep.parameters.locatorType !== 'xpath') {
+    emitChange()
+    return
+  }
+  await applyOptimizedXpath(localStep.parameters.locatorValue, true)
+}
+
 const currentTitle = computed(() => {
   if (!props.step) return '当前未选择步骤'
-  return `步骤配置 - ${mapActionLabel(props.step.action)}`
+  return `步骤配置 - ${mapActionLabel(activeActionKey.value)}`
 })
 
 const knownAction = computed(() => {
   if (!props.step) return false
   return actionGroups.some((group) =>
-    group.actions.some((a) => a.key === props.step.action),
+    group.actions.some((a) => a.key === activeActionKey.value),
   )
 })
 
 watch(
   () => props.step,
-  (val) => {
+  (val, oldVal) => {
     if (!val) return
+    const nextLocatorType = val.parameters?.locatorType || ''
+    const nextLocatorValue = String(val.parameters?.locatorValue || '').trim()
+    const shouldResetPreview =
+      !xpathPreview.value
+      || oldVal?.id !== val.id
+      || oldVal?.action !== val.action
+      || nextLocatorType !== 'xpath'
+      || !nextLocatorValue
+
+    if (shouldResetPreview) {
+      xpathPreviewRequestId += 1
+      xpathPreview.value = null
+    }
     localStep.id = val.id
     localStep.type = val.type
     localStep.action = val.action
@@ -430,6 +634,8 @@ function onOrderChange(val) {
 function onGroupChange(type) {
   selectedGroupType.value = type
   selectedActionKey.value = ''
+  xpathPreviewRequestId += 1
+  xpathPreview.value = null
 }
 
 function onActionChange(actionKey) {
@@ -437,16 +643,20 @@ function onActionChange(actionKey) {
   if (!group) return
   const act = group.actions.find((a) => a.key === actionKey)
   if (!act) return
+  const previousActionLabel = mapActionLabel(activeActionKey.value)
+  const previousDescription = String(localStep.description || '').trim()
   const base = createStepFromAction(
     { key: act.key, label: act.label },
     group.type,
   )
   localStep.type = group.type
   localStep.action = act.key
-  if (!localStep.description) {
+  if (!previousDescription || previousDescription === previousActionLabel) {
     localStep.description = act.label
   }
   localStep.parameters = { ...(base.parameters || {}) }
+  xpathPreviewRequestId += 1
+  xpathPreview.value = null
   emitChange()
 }
 </script>
@@ -456,63 +666,235 @@ function onActionChange(actionKey) {
   height: 100%;
   display: flex;
   flex-direction: column;
+  border-radius: var(--border-radius);
+  overflow: hidden;
 }
 
 .panel-header {
   display: flex;
   flex-direction: column;
+  padding: 18px 20px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  background: linear-gradient(135deg, #fbfdff 0%, #f3f8ff 100%);
+  min-height: 86px;
+  box-sizing: border-box;
 }
 
 .panel-title {
   font-weight: 600;
+  font-size: 15px;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .panel-subtitle {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--text-secondary);
+  margin-top: 8px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.94);
+  border-radius: 999px;
+  display: inline-block;
+  border: 1px solid rgba(226, 232, 240, 0.95);
 }
 
 .form-body {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 16px;
   flex: 1;
   overflow-y: auto;
+  padding: 20px;
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.92) 0%, rgba(255, 255, 255, 0.98) 100%);
+}
+
+:deep(.el-form-item) {
+  margin-bottom: 0;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.88);
+}
+
+:deep(.el-form-item:last-child) {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+:deep(.el-form-item__label) {
+  font-weight: 500;
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 32px;
+}
+
+:deep(.el-input__wrapper) {
+  border-radius: 8px;
+}
+
+:deep(.el-select) {
+  width: 100%;
+}
+
+:deep(.el-input-number) {
+  width: 100%;
 }
 
 .action-type-row {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  gap: 12px;
+}
+
+.action-type-row .el-select {
+  flex: 1;
 }
 
 .upload {
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
 
 .upload-tip {
-  font-size: 12px;
-  color: #9ca3af;
-  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 6px 0 0;
+  line-height: 1.5;
+}
+
+.xpath-tip {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 4px 0 0;
+  line-height: 1.4;
+}
+
+.xpath-preview {
+  background: linear-gradient(135deg, #ffffff 0%, #f7fbff 100%);
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin: 0 0 12px 0;
+}
+
+.preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.preview-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.preview-compare {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.preview-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.preview-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.preview-value {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 11px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  word-break: break-all;
+  line-height: 1.4;
+  max-height: 60px;
+  overflow-y: auto;
+}
+
+.preview-value.original {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+.preview-value.optimized {
+  background: #ecfeff;
+  border: 1px solid #a5f3fc;
+  color: #0f766e;
+}
+
+.preview-arrow {
+  font-size: 18px;
+  color: #999;
+  flex-shrink: 0;
+}
+
+.preview-info {
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding-top: 8px;
+  border-top: 1px dashed rgba(226, 232, 240, 0.95);
+}
+
+.preview-info--hint {
+  color: #d97706;
+  border-top: none;
+  padding-top: 4px;
 }
 
 .footer {
-  margin-top: 8px;
+  margin-top: auto;
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.96);
+  border-top: 1px solid rgba(226, 232, 240, 0.88);
+}
+
+.footer .el-button {
+  width: 100%;
+  border-radius: 8px;
 }
 
 .footer-tip {
-  font-size: 12px;
-  color: #9ca3af;
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.5;
 }
 
 .empty-tip {
   text-align: center;
-  color: #9ca3af;
-  font-size: 13px;
-  padding: 24px 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  padding: 60px 20px;
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.92) 0%, rgba(255, 255, 255, 0.98) 100%);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.empty-tip::before {
+  content: '📋';
+  font-size: 48px;
+  opacity: 0.5;
+}
+
+:deep(.el-radio-button__inner) {
+  border-radius: 6px;
+}
+
+:deep(.el-alert) {
+  border-radius: 8px;
 }
 </style>
-

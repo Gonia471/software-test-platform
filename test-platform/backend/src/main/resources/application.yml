@@ -7,12 +7,15 @@ spring:
   application:
     name: software-test-platform
 
+  # Python 脚本执行器配置
+  python:
+    # Python 命令路径，支持环境变量覆盖
+    # 本地 Windows: py
+    # 云端部署: python3 或 /usr/bin/python3
+    command: ${PYTHON_COMMAND:py}
+
   datasource:
-    # 默认使用 H2 内存数据库（本地开发无需安装 MySQL）
-    # 通过环境变量切换：
-    # - SPRING_PROFILES_ACTIVE=production 使用 MySQL
-    # - DATABASE_URL 存在时使用 PostgreSQL（Render 部署）
-    url: ${SPRING_DATASOURCE_URL:${DB_URL:jdbc:h2:mem:test_platform;DB_CLOSE_DELAY=-1;MODE=MySQL}}
+    url: ${SPRING_DATASOURCE_URL:${DB_URL:jdbc:h2:file:./data/test_platform;DB_CLOSE_DELAY=-1;MODE=MySQL}}
     username: ${SPRING_DATASOURCE_USERNAME:${DB_USERNAME:sa}}
     password: ${SPRING_DATASOURCE_PASSWORD:${DB_PASSWORD:}}
     driver-class-name: org.h2.Driver
@@ -22,13 +25,20 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
+    defer-datasource-initialization: false
     show-sql: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.H2Dialect
         format_sql: true
     open-in-view: false
+
+  sql:
+    init:
+      mode: always
+      continue-on-error: false
+      encoding: UTF-8
 
   h2:
     console:
@@ -39,28 +49,4 @@ spring:
 app:
   jwt:
     secret: ${JWT_SECRET:software-test-platform-jwt-secret-key-at-least-32-bytes}
-    expiration-ms: ${JWT_EXPIRATION_MS:86400000}   # 24 小时
-
-  ui-test:
-    # 手动指定本地 chromedriver.exe 路径，国内网络无法自动下载时使用。
-    # 留空则由 Selenium Manager 自动管理（首次运行需联网）。
-    # 国内下载 ChromeDriver: https://registry.npmmirror.com/binary.html?path=chromedriver/
-    chrome-driver-path: ''
-    ai:
-      # 是否启用远程 AI 视觉/自然语言规划；false 时使用本地规则兜底
-      enabled: ${UI_AI_ENABLED:false}
-      # 你的 AI 网关地址（建议由你自建统一网关），返回约定 JSON
-      endpoint: ${UI_AI_ENDPOINT:}
-      # 建议使用环境变量注入，例如 ${AI_API_KEY:}
-      api-key: ${UI_AI_API_KEY:}
-      # 模型名透传到网关，便于网关侧路由
-      model: ${UI_AI_MODEL:}
-      # AI 请求超时（毫秒）
-      timeout-ms: ${UI_AI_TIMEOUT_MS:20000}
-      # 低于该置信度则回退本地规则
-      min-confidence: ${UI_AI_MIN_CONFIDENCE:0.7}
-
-# 开发时可改为 true 查看 SQL
-# logging:
-#   level:
-#     org.hibernate.SQL: debug
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}

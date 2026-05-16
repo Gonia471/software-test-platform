@@ -38,6 +38,9 @@ public class UiTestExecution {
     @Column(name = "stop_requested", nullable = false)
     private Boolean stopRequested = false;
 
+    @Column(name = "project_id")
+    private Long projectId;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 

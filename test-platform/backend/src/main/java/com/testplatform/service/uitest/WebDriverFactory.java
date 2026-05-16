@@ -52,17 +52,82 @@ public class WebDriverFactory {
             chromeOptions.setBinary(chromeBinary.toString());
             log.info("[ChromeDriver] 浏览器可执行文件: {}", chromeBinary);
         }
-        if (options.isHeadless()) {
-            chromeOptions.addArguments("--headless=new");
-        }
-        chromeOptions.addArguments("--disable-gpu");
-        chromeOptions.addArguments("--window-size=1280,800");
-        chromeOptions.addArguments("--no-sandbox");
-        chromeOptions.addArguments("--disable-dev-shm-usage");
-        chromeOptions.addArguments("--remote-allow-origins=*");
 
-        log.info("[ChromeDriver] 正在启动 Chrome 浏览器, headless={}", options.isHeadless());
-        return new ChromeDriver(chromeOptions);
+        String osName = System.getProperty("os.name", "").toLowerCase();
+        boolean isWindows = osName.contains("win");
+
+        boolean headlessMode = options.isHeadless();
+        log.info("[ChromeDriver] headless={}, 显示浏览器={}", headlessMode, !headlessMode);
+
+        if (headlessMode) {
+            log.info("[ChromeDriver] 启用无头模式");
+            chromeOptions.addArguments("--headless=new");
+            if (isWindows) {
+                chromeOptions.addArguments("--headless");
+            }
+        } else {
+            log.info("[ChromeDriver] 启用可视化模式（显示浏览器窗口）");
+            chromeOptions.addArguments("--start-maximized");
+            chromeOptions.addArguments("--disable-blink-features=AutomationControlled");
+            if (isWindows) {
+                chromeOptions.addArguments("--disable-extensions");
+                chromeOptions.addArguments("--disable-popup-blocking");
+                chromeOptions.addArguments("--no-first-run");
+                chromeOptions.addArguments("--no-default-browser-check");
+            }
+        }
+
+        if (isWindows) {
+            chromeOptions.addArguments("--disable-gpu");
+            chromeOptions.addArguments("--disable-software-rasterizer");
+            chromeOptions.addArguments("--disable-gpu-sandbox");
+            chromeOptions.addArguments("--disable-background-networking");
+            chromeOptions.addArguments("--disable-default-apps");
+            chromeOptions.addArguments("--disable-sync");
+            chromeOptions.addArguments("--disable-translate");
+            chromeOptions.addArguments("--metrics-recording-only");
+            chromeOptions.addArguments("--mute-audio");
+            chromeOptions.addArguments("--no-sandbox");
+            chromeOptions.addArguments("--ignore-certificate-errors");
+            chromeOptions.addArguments("--ignore-ssl-errors");
+            chromeOptions.addArguments("--ignore-certificate-errors-spki-list");
+            chromeOptions.addArguments("--ignore-user-profile-probing");
+            chromeOptions.addArguments("--disable-client-side-phishing-detection");
+            chromeOptions.addArguments("--disable-hang-monitor");
+            chromeOptions.addArguments("--disable-ipc-flooding-protection");
+            chromeOptions.addArguments("--disable-renderer-backgrounding");
+            chromeOptions.addArguments("--disable-background-timer-throttling");
+            chromeOptions.addArguments("--disable-backgrounding-occluded-windows");
+            chromeOptions.addArguments("--disable-web-security");
+            chromeOptions.addArguments("--force-color-profile=srgb");
+            chromeOptions.addArguments("--disable-features=TranslateUI");
+            chromeOptions.addArguments("--allow-running-insecure-content");
+            chromeOptions.addArguments("--enable-features=NetworkService,NetworkServiceInProcess");
+            chromeOptions.setExperimentalOption("excludeSwitches", List.of("enable-automation"));
+            chromeOptions.setExperimentalOption("useAutomationExtension", false);
+
+            String userDataDir = System.getProperty("java.io.tmpdir") + "\\selenium-chrome-data-" + System.currentTimeMillis();
+            chromeOptions.addArguments("--user-data-dir=" + userDataDir);
+            log.info("[ChromeDriver] Windows 环境，使用临时用户数据目录: {}", userDataDir);
+        } else {
+            chromeOptions.addArguments("--disable-gpu");
+            chromeOptions.addArguments("--no-sandbox");
+            chromeOptions.addArguments("--disable-dev-shm-usage");
+        }
+
+        chromeOptions.addArguments("--remote-allow-origins=*");
+        chromeOptions.addArguments("--window-size=1280,800");
+
+        log.info("[ChromeDriver] 正在启动 Chrome 浏览器");
+        log.info("[ChromeDriver] ChromeOptions: {}", chromeOptions.asMap());
+
+        try {
+            return new ChromeDriver(chromeOptions);
+        } catch (Exception e) {
+            log.error("[ChromeDriver] 启动失败，切换为无头模式: {}", e.getMessage());
+            chromeOptions.addArguments("--headless=new");
+            return new ChromeDriver(chromeOptions);
+        }
     }
 
     public RemoteWebDriver createRemote(URL url, ExecutionOptions options) {

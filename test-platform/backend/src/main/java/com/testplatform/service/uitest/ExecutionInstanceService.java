@@ -6,6 +6,7 @@ import com.testplatform.dto.uitest.CreateInstanceRequest;
 import com.testplatform.dto.uitest.ExecutionInstanceDto;
 import com.testplatform.entity.uitest.UiExecutionInstance;
 import com.testplatform.repository.uitest.UiExecutionInstanceRepository;
+import com.testplatform.repository.uitest.UiTestExecutionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,16 +19,49 @@ import java.util.stream.Collectors;
 public class ExecutionInstanceService {
 
     private final UiExecutionInstanceRepository instanceRepository;
+    private final UiTestExecutionRepository executionRepository;
     private final ObjectMapper objectMapper;
 
-    public ExecutionInstanceService(UiExecutionInstanceRepository instanceRepository, ObjectMapper objectMapper) {
+    public ExecutionInstanceService(UiExecutionInstanceRepository instanceRepository,
+                                     UiTestExecutionRepository executionRepository,
+                                     ObjectMapper objectMapper) {
         this.instanceRepository = instanceRepository;
+        this.executionRepository = executionRepository;
         this.objectMapper = objectMapper;
     }
 
     @Transactional
     public List<ExecutionInstanceDto> listAll() {
         List<UiExecutionInstance> entities = instanceRepository.findAll();
+        
+        boolean cleaned = false;
+        for (UiExecutionInstance entity : entities) {
+            String name = entity.getName();
+            if (name == null) continue;
+            
+            if (name.contains("뵼") || name.contains("쿴") 
+                || name.contains("鏈") || name.contains("湴") 
+                || name.contains("娴") || name.contains("忚") 
+                || name.contains("鍣") || name.contains("ㄤ")
+                || name.getBytes().length > 15) {
+                
+                Long entityId = entity.getId();
+                boolean hasExecutions = executionRepository.existsByInstanceId(entityId);
+                
+                if (hasExecutions) {
+                    entity.setName("本地浏览器");
+                    entity.setType("LOCAL");
+                    instanceRepository.save(entity);
+                } else {
+                    instanceRepository.delete(entity);
+                }
+                cleaned = true;
+            }
+        }
+        if (cleaned) {
+            entities = instanceRepository.findAll();
+        }
+
         if (entities.isEmpty()) {
             UiExecutionInstance local = new UiExecutionInstance();
             local.setName("本地浏览器");

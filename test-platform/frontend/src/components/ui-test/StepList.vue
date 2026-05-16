@@ -2,7 +2,7 @@
   <el-card class="panel" shadow="never">
     <template #header>
       <div class="panel-header">
-        <div>
+        <div class="panel-header-left">
           <span class="panel-title">测试步骤</span>
           <span class="panel-subtitle">拖拽调整顺序，点击选择步骤</span>
         </div>
@@ -20,12 +20,12 @@
       :class="{ 'is-empty': !steps || !steps.length }"
     >
       <draggable
-        v-if="steps && steps.length"
         v-model="innerSteps"
         item-key="id"
         :group="dragGroup"
         handle=".step-card__drag"
         class="step-list"
+        :class="{ 'is-empty-list': !innerSteps.length }"
       >
         <template #item="{ element, index }">
           <div
@@ -79,11 +79,12 @@
             </div>
           </div>
         </template>
+        <template #footer>
+          <div v-if="!innerSteps.length" class="empty-tip">
+            将左侧动作拖拽到此处以创建测试步骤
+          </div>
+        </template>
       </draggable>
-
-      <div v-else class="empty-tip">
-        将左侧动作拖拽到此处以创建测试步骤
-      </div>
     </div>
   </el-card>
 </template>
@@ -250,23 +251,42 @@ defineExpose({
   height: 100%;
   display: flex;
   flex-direction: column;
+  border-radius: var(--border-radius);
+  overflow: hidden;
 }
 
 .panel-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  background: linear-gradient(135deg, #fbfdff 0%, #f3f8ff 100%);
+  min-height: 86px;
+  box-sizing: border-box;
+}
+
+.panel-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .panel-title {
   font-weight: 600;
+  font-size: 15px;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .panel-subtitle {
   display: block;
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--text-secondary);
+  margin-top: 4px;
 }
 
 .panel-actions {
@@ -276,58 +296,81 @@ defineExpose({
 .step-container {
   flex: 1;
   overflow: auto;
+  padding: 14px;
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.9) 0%, rgba(255, 255, 255, 0.98) 100%);
 }
 
 .step-container.is-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #9ca3af;
-  font-size: 13px;
+  background: #f8fbff;
+  border-radius: 16px;
+  min-height: 120px;
+  border: 2px dashed rgba(148, 163, 184, 0.3);
 }
 
 .step-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  min-height: 100%;
+}
+
+.step-list.is-empty-list {
+  min-height: 120px;
+  justify-content: center;
 }
 
 .step-card {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-  background-color: #ffffff;
+  gap: 12px;
+  padding: 14px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background-color: rgba(255, 255, 255, 0.96);
   cursor: pointer;
+  transition: var(--transition);
+}
+
+.step-card:hover {
+  border-color: var(--primary-color-light);
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.08);
 }
 
 .step-card.is-active {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.5);
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+  background: linear-gradient(135deg, #f8fbff 0%, #eef6ff 100%);
 }
 
 .step-card__left {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  min-width: 32px;
+  gap: 6px;
+  min-width: 36px;
 }
 
 .step-index {
-  font-size: 12px;
-  color: #6b7280;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary-color);
+  background: rgba(59, 130, 246, 0.1);
+  padding: 4px 10px;
+  border-radius: 999px;
 }
 
 .step-card__drag {
   border: none;
   background: transparent;
   cursor: grab;
-  font-size: 14px;
-  color: #9ca3af;
+  font-size: 16px;
+  color: #cbd5e1;
   padding: 0;
+  transition: var(--transition);
+}
+
+.step-card__drag:hover {
+  color: var(--primary-color);
 }
 
 .step-card__body {
@@ -337,32 +380,44 @@ defineExpose({
 .step-title {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 2px;
+  gap: 8px;
+  margin-bottom: 4px;
 }
 
 .step-type-tag {
-  font-size: 11px;
-  padding: 0 6px;
+  font-size: 10px;
+  padding: 4px 9px;
   border-radius: 999px;
-  background: #eff6ff;
-  color: #2563eb;
+  background: rgba(20, 184, 166, 0.1);
+  color: #0f766e;
+  font-weight: 700;
 }
 
 .step-action {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--primary-color);
 }
 
 .step-description {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
 }
 
 .step-params {
-  margin-top: 2px;
-  font-size: 12px;
-  color: #9ca3af;
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: #f8fbff;
+  padding: 5px 10px;
+  border-radius: 999px;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .step-card__ops {
@@ -375,27 +430,27 @@ defineExpose({
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  padding: 2px 0;
-  border-radius: 8px;
-  background-color: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  padding: 4px 0;
+  border-radius: 12px;
+  background: #f8fbff;
+  border: 1px solid rgba(226, 232, 240, 0.9);
 }
 
 .step-op-btn {
   margin: 0;
-  padding: 2px 8px;
-  min-height: 22px;
-  font-size: 12px;
+  padding: 4px 10px;
+  min-height: 24px;
+  font-size: 11px;
   justify-content: center;
   border-radius: 0;
+  font-weight: 500;
 }
 
 .step-op-btn + .step-op-btn {
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
 }
 
 .empty-tip {
   text-align: center;
 }
 </style>
-

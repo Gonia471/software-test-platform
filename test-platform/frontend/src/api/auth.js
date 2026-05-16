@@ -1,11 +1,11 @@
 import request from './request'
 
-export function login(username, password) {
-  return request.post('/auth/login', { username, password })
+export function registerWithOrg(phone, orgName, description) {
+  return request.post('/auth/register-with-org', { phone, orgName, description })
 }
 
-export function register(username, password) {
-  return request.post('/auth/register', { username, password })
+export function loginWithCode(phone) {
+  return request.post('/auth/login-with-code', { phone })
 }
 
 export function getMe() {

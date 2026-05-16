@@ -10,6 +10,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.dao.DataAccessException;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -49,6 +50,12 @@ public class GlobalExceptionHandler {
         String detail = root.getMessage() != null ? root.getMessage() : "数据保存失败";
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of("message", "数据保存失败: " + detail));
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Map<String, String>> handleResponseStatus(ResponseStatusException e) {
+        String message = e.getReason() != null ? e.getReason() : "请求处理失败";
+        return ResponseEntity.status(e.getStatusCode()).body(Map.of("message", message));
     }
 
     @ExceptionHandler(Exception.class)

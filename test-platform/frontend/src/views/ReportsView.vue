@@ -1,6 +1,24 @@
 <template>
   <div class="page">
-    <el-page-header content="测试报告" class="page-header" />
+    <section class="report-hero">
+      <div class="report-hero__main">
+        <el-page-header content="测试报告" class="page-header" />
+        <h2 class="hero-title">统一查看 UI 与 API 测试执行结果</h2>
+        <p class="hero-desc">
+          报告中心整合最近执行记录、响应信息、断言结果与 UI 自动化截图，方便展示完整测试闭环。
+        </p>
+      </div>
+      <div class="report-hero__side">
+        <div class="hero-stat">
+          <span class="hero-stat__label">UI 记录</span>
+          <strong class="hero-stat__value">{{ uiExecutions.length }}</strong>
+        </div>
+        <div class="hero-stat">
+          <span class="hero-stat__label">API 记录</span>
+          <strong class="hero-stat__value">{{ apiExecutions.length }}</strong>
+        </div>
+      </div>
+    </section>
 
     <el-tabs v-model="activeTab" class="report-tabs">
       <el-tab-pane label="UI 自动化" name="ui">
@@ -24,9 +42,17 @@
               >
                 <el-table-column prop="id" label="执行 ID" width="88" />
                 <el-table-column prop="testCaseName" label="用例名称" min-width="160" show-overflow-tooltip />
+                <el-table-column prop="projectName" label="所属项目" min-width="120" show-overflow-tooltip>
+                  <template #default="{ row }">
+                    <el-tag v-if="row.projectName" size="small" effect="plain">{{ row.projectName }}</el-tag>
+                    <span v-else>-</span>
+                  </template>
+                </el-table-column>
                 <el-table-column prop="status" label="状态" width="100">
                   <template #default="{ row }">
-                    <el-tag :type="uiStatusType(row.status)" size="small">{{ row.status }}</el-tag>
+                    <el-tag :type="uiStatusType(row.status)" size="small">
+                      {{ row.status === 'PASSED' ? '测试通过' : row.status === 'FAILED' ? '测试失败' : row.status === 'STOPPED' ? '已停止' : row.status }}
+                    </el-tag>
                   </template>
                 </el-table-column>
                 <el-table-column prop="createdAt" label="创建时间" width="170">
@@ -50,7 +76,147 @@
         </div>
       </el-tab-pane>
       <el-tab-pane label="接口测试" name="api">
-        <el-empty description="接口测试报告将后续接入" />
+        <div class="api-report-layout">
+          <el-card shadow="never" class="list-card">
+            <template #header>
+              <div class="card-head">
+                <span>最近执行</span>
+                <el-button size="small" :icon="Refresh" @click="loadApiList">刷新</el-button>
+              </div>
+            </template>
+            <div v-loading="apiListLoading" class="list-body">
+              <el-table
+                :data="apiExecutions"
+                stripe
+                row-key="id"
+                :row-class-name="apiRowClassName"
+                @row-click="onApiRowClick"
+                max-height="calc(100vh - 260px)"
+                empty-text="暂无接口测试执行记录"
+              >
+                <el-table-column prop="id" label="执行 ID" width="80" />
+                <el-table-column prop="collectionName" label="接口名称" min-width="180" show-overflow-tooltip />
+                <el-table-column prop="projectName" label="所属合集" min-width="120" show-overflow-tooltip>
+                  <template #default="{ row }">
+                    <el-tag v-if="row.projectName" size="small" effect="plain">{{ row.projectName }}</el-tag>
+                    <span v-else>-</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="httpStatus" label="HTTP状态" width="100">
+                  <template #default="{ row }">
+                    <el-tag :type="httpStatusType(row.httpStatus)" size="small">
+                      {{ row.httpStatus || '-' }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="status" label="测试结果" width="100">
+                  <template #default="{ row }">
+                    <el-tag :type="apiStatusType(row.status)" size="small">
+                      {{ row.status === 'SUCCESS' ? '通过' : row.status === 'FAILED' ? '失败' : row.status }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="duration" label="耗时(ms)" width="90">
+                  <template #default="{ row }">
+                    {{ row.duration || '-' }}
+                  </template>
+                </el-table-column>
+                <el-table-column prop="createdAt" label="执行时间" width="170">
+                  <template #default="{ row }">
+                    {{ formatTime(row.createdAt) }}
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+          </el-card>
+
+          <el-card shadow="never" class="detail-card">
+            <template #header>
+              <span>执行详情</span>
+            </template>
+            <div v-loading="apiDetailLoading" class="detail-body">
+              <div v-if="apiDetail" class="api-detail-content">
+                <div class="detail-header">
+                  <div class="detail-info">
+                    <el-tag :type="apiStatusType(apiDetail.status)" size="large">
+                      {{ apiDetail.status === 'SUCCESS' ? '通过' : apiDetail.status === 'FAILED' ? '失败' : apiDetail.status }}
+                    </el-tag>
+                    <span class="detail-url">{{ apiDetail.request?.url }}</span>
+                  </div>
+                  <div class="detail-meta">
+                    <span>所属合集 {{ apiDetail.projectName || '-' }}</span>
+                    <span>HTTP {{ apiDetail.httpStatus }} {{ apiDetail.statusText }}</span>
+                    <span>耗时 {{ apiDetail.duration }}ms</span>
+                  </div>
+                </div>
+
+                <el-tabs>
+                  <el-tab-pane label="请求信息" name="request">
+                    <div class="request-section">
+                      <div class="section-item">
+                        <div class="section-label">请求方法</div>
+                        <el-tag :type="methodTagType(apiDetail.request?.method)">
+                          {{ apiDetail.request?.method || 'GET' }}
+                        </el-tag>
+                      </div>
+                      <div class="section-item">
+                        <div class="section-label">请求地址</div>
+                        <div class="code-block">{{ apiDetail.request?.url }}</div>
+                      </div>
+                      <div v-if="apiDetail.request?.headers" class="section-item">
+                        <div class="section-label">请求头</div>
+                        <pre class="code-block">{{ formatJson(apiDetail.request.headers) }}</pre>
+                      </div>
+                      <div v-if="apiDetail.request?.body" class="section-item">
+                        <div class="section-label">请求体</div>
+                        <pre class="code-block">{{ formatBody(apiDetail.request.body) }}</pre>
+                      </div>
+                    </div>
+                  </el-tab-pane>
+
+                  <el-tab-pane label="响应信息" name="response">
+                    <div class="response-section">
+                      <div v-if="apiDetail.response?.headers" class="section-item">
+                        <div class="section-label">响应头</div>
+                        <pre class="code-block">{{ formatJson(apiDetail.response.headers) }}</pre>
+                      </div>
+                      <div v-if="apiDetail.response?.body" class="section-item">
+                        <div class="section-label">响应体</div>
+                        <pre class="code-block response-body">{{ formatBody(apiDetail.response.body) }}</pre>
+                      </div>
+                      <div v-if="apiDetail.errorMessage" class="section-item">
+                        <div class="section-label">错误信息</div>
+                        <pre class="code-block error-body">{{ apiDetail.errorMessage }}</pre>
+                      </div>
+                    </div>
+                  </el-tab-pane>
+
+                  <el-tab-pane label="断言结果" name="assertions">
+                    <div v-if="apiDetail.assertions && apiDetail.assertions.length > 0" class="assertions-section">
+                      <div
+                        v-for="(assertion, idx) in apiDetail.assertions"
+                        :key="idx"
+                        class="assertion-item"
+                        :class="{ passed: assertion.passed, failed: !assertion.passed }"
+                      >
+                        <el-icon><Check v-if="assertion.passed" /><Close v-else /></el-icon>
+                        <div class="assertion-content">
+                          <div class="assertion-description">{{ assertion.description || assertion.type }}</div>
+                          <div class="assertion-details">
+                            <span>期望: {{ assertion.expected }}</span>
+                            <span>实际: {{ assertion.actual }}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <el-empty v-else description="暂无断言结果" />
+                  </el-tab-pane>
+                </el-tabs>
+              </div>
+              <el-empty v-else description="请从左侧选择一条执行记录" />
+            </div>
+          </el-card>
+        </div>
       </el-tab-pane>
     </el-tabs>
   </div>
@@ -59,20 +225,28 @@
 <script setup>
 import { ref, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Refresh } from '@element-plus/icons-vue'
+import { Refresh, Check, Close } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import UiExecutionReportPanel from '../components/ui-test/UiExecutionReportPanel.vue'
 import { listExecutions, getExecutionDetail } from '../api/uiTest'
+import { listApiExecutions, getApiExecutionDetail } from '../api/apiTest'
 
 const route = useRoute()
 const router = useRouter()
 
 const activeTab = ref('ui')
+
 const uiListLoading = ref(false)
 const uiDetailLoading = ref(false)
 const uiExecutions = ref([])
 const selectedUiId = ref(null)
 const uiDetail = ref(null)
+
+const apiListLoading = ref(false)
+const apiDetailLoading = ref(false)
+const apiExecutions = ref([])
+const selectedApiId = ref(null)
+const apiDetail = ref(null)
 
 function uiStatusType(status) {
   if (status === 'PASSED') return 'success'
@@ -80,11 +254,62 @@ function uiStatusType(status) {
   return 'info'
 }
 
+function apiStatusType(status) {
+  if (status === 'SUCCESS') return 'success'
+  if (status === 'FAILED') return 'danger'
+  return 'warning'
+}
+
+function httpStatusType(status) {
+  if (!status) return 'info'
+  if (status >= 200 && status < 300) return 'success'
+  if (status >= 400 && status < 500) return 'warning'
+  if (status >= 500) return 'danger'
+  return 'info'
+}
+
+function methodTagType(method) {
+  const types = {
+    GET: '',
+    POST: 'success',
+    PUT: 'warning',
+    DELETE: 'danger',
+    PATCH: 'info',
+    HEAD: 'info',
+    OPTIONS: 'info',
+  }
+  return types[method] || ''
+}
+
 function formatTime(iso) {
   if (!iso) return '-'
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return String(iso)
   return d.toLocaleString('zh-CN', { hour12: false })
+}
+
+function formatJson(obj) {
+  if (!obj) return ''
+  if (typeof obj === 'string') {
+    try {
+      return JSON.stringify(JSON.parse(obj), null, 2)
+    } catch {
+      return obj
+    }
+  }
+  return JSON.stringify(obj, null, 2)
+}
+
+function formatBody(body) {
+  if (!body) return ''
+  if (typeof body === 'string') {
+    try {
+      return JSON.stringify(JSON.parse(body), null, 2)
+    } catch {
+      return body
+    }
+  }
+  return JSON.stringify(body, null, 2)
 }
 
 async function loadUiList() {
@@ -127,6 +352,50 @@ function onUiRowClick(row) {
   loadUiDetail(row.id)
 }
 
+async function loadApiList() {
+  apiListLoading.value = true
+  try {
+    const res = await listApiExecutions(50)
+    apiExecutions.value = res.data || []
+  } catch (e) {
+    ElMessage.error(e.response?.data?.message || '加载API执行列表失败')
+    apiExecutions.value = []
+  } finally {
+    apiListLoading.value = false
+  }
+}
+
+async function loadApiDetail(id) {
+  if (!id) {
+    apiDetail.value = null
+    return
+  }
+  apiDetailLoading.value = true
+  try {
+    const res = await getApiExecutionDetail(id)
+    apiDetail.value = res.data
+  } catch (e) {
+    ElMessage.error(e.response?.data?.message || '加载执行详情失败')
+    apiDetail.value = null
+  } finally {
+    apiDetailLoading.value = false
+  }
+}
+
+function apiRowClassName({ row }) {
+  return row.id === selectedApiId.value ? 'ui-exec-row-selected' : ''
+}
+
+function onApiRowClick(row) {
+  selectedApiId.value = row.id
+  router.replace({ query: { ...route.query, apiExecution: String(row.id) } })
+  loadApiDetail(row.id)
+}
+
+onMounted(() => {
+  loadUiList()
+})
+
 watch(
   () => route.query.uiExecution,
   (q) => {
@@ -139,17 +408,28 @@ watch(
       uiDetail.value = null
     }
   },
+  { immediate: true }
 )
 
-onMounted(() => {
-  loadUiList().then(() => {
-    const q = route.query.uiExecution
+watch(
+  () => route.query.apiExecution,
+  (q) => {
     const id = q ? Number(q) : null
     if (id && !Number.isNaN(id)) {
-      selectedUiId.value = id
-      loadUiDetail(id)
+      selectedApiId.value = id
+      loadApiDetail(id)
+    } else {
+      selectedApiId.value = null
+      apiDetail.value = null
     }
-  })
+  },
+  { immediate: true }
+)
+
+watch(activeTab, (tab) => {
+  if (tab === 'api' && apiExecutions.value.length === 0) {
+    loadApiList()
+  }
 })
 </script>
 
@@ -157,50 +437,205 @@ onMounted(() => {
 .page {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 18px;
 }
 
 .page-header {
   padding: 0;
+  margin-bottom: 12px;
 }
 
-.report-tabs :deep(.el-tabs__content) {
-  padding-top: 8px;
-}
-
-.ui-report-layout {
-  display: grid;
-  grid-template-columns: minmax(320px, 38%) 1fr;
-  gap: 16px;
-  align-items: start;
-}
-
-@media (max-width: 960px) {
-  .ui-report-layout {
-    grid-template-columns: 1fr;
-  }
-}
-
-.list-card,
-.detail-card {
-  border-radius: 10px;
-}
-
-.card-head {
+.report-hero {
   display: flex;
-  align-items: center;
   justify-content: space-between;
+  gap: 18px;
+  padding: 24px;
+  border-radius: var(--border-radius);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(246, 250, 255, 0.98) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  box-shadow: var(--card-shadow);
+}
+
+.report-hero__main {
+  min-width: 0;
+}
+
+.hero-title {
+  margin: 0 0 10px;
+  font-size: 28px;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+
+.hero-desc {
+  max-width: 740px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.report-hero__side {
+  display: grid;
+  gap: 12px;
+  min-width: 220px;
+}
+
+.hero-stat {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: var(--primary-soft-gradient);
+  border: 1px solid rgba(59, 130, 246, 0.12);
+}
+
+.hero-stat__label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.hero-stat__value {
+  font-size: 24px;
+  color: var(--text-primary);
+}
+
+.report-tabs {
+  height: calc(100vh - 190px);
+}
+
+.ui-report-layout,
+.api-report-layout {
+  display: flex;
+  gap: 16px;
+  height: calc(100vh - 250px);
+}
+
+.list-card {
+  width: 480px;
+  flex-shrink: 0;
+}
+
+.detail-card {
+  flex: 1;
+  overflow: hidden;
 }
 
 .list-body {
-  min-height: 200px;
+  overflow-y: auto;
 }
 
 .detail-body {
-  min-height: 320px;
+  overflow-y: auto;
+  height: calc(100vh - 220px);
 }
 
-:deep(.el-table__body tr.ui-exec-row-selected > td.el-table__cell) {
-  background-color: #eef2ff !important;
+.detail-header {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+}
+
+.detail-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.detail-url {
+  font-size: 14px;
+  color: var(--el-text-color-regular);
+  word-break: break-all;
+}
+
+.detail-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.request-section,
+.response-section,
+.assertions-section {
+  padding: 12px 4px;
+}
+
+.section-item {
+  margin-bottom: 16px;
+}
+
+.section-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 8px;
+}
+
+.code-block {
+  background: #f8fbff;
+  padding: 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-family: 'Monaco', 'Menlo', monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+}
+
+.response-body {
+  background: #f0f9ff;
+}
+
+.error-body {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.assertion-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+
+.assertion-item.passed {
+  background: #f0fdf4;
+}
+
+.assertion-item.failed {
+  background: #fef2f2;
+}
+
+.assertion-content {
+  flex: 1;
+}
+
+.assertion-description {
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.assertion-details {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  display: flex;
+  gap: 16px;
+}
+
+@media (max-width: 1200px) {
+  .report-hero {
+    flex-direction: column;
+  }
+
+  .report-hero__side {
+    min-width: 0;
+    grid-template-columns: 1fr 1fr;
+  }
 }
 </style>

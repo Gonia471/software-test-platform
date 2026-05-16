@@ -19,10 +19,24 @@ request.interceptors.request.use(config => {
 request.interceptors.response.use(
   res => res,
   err => {
+    console.error('API Error:', err.config?.url, err.response?.status, err.response?.data)
+    const responseMessage = err.response?.data?.message
+    if (responseMessage) {
+      err.message = responseMessage
+    }
     if (err.response?.status === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('username')
-      window.location.href = '/login'
+      const currentToken = localStorage.getItem('token')
+      if (currentToken) {
+        console.warn('Unauthorized! Clearing token and redirecting to login...')
+        localStorage.removeItem('token')
+        localStorage.removeItem('username')
+        localStorage.removeItem('phone')
+        localStorage.removeItem('userId')
+        localStorage.removeItem('isDevMode')
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login'
+        }
+      }
     }
     return Promise.reject(err)
   }
