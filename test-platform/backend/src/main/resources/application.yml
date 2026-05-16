@@ -50,3 +50,12 @@ app:
   jwt:
     secret: ${JWT_SECRET:software-test-platform-jwt-secret-key-at-least-32-bytes}
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+  ui-test:
+    ai:
+      enabled: ${UI_TEST_AI_ENABLED:false}
+      provider: ${UI_TEST_AI_PROVIDER:dashscope}
+      endpoint: ${UI_TEST_AI_ENDPOINT:https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions}
+      api-key: ${UI_TEST_AI_API_KEY:}
+      model: ${UI_TEST_AI_MODEL:qwen-plus}
+      timeout-ms: ${UI_TEST_AI_TIMEOUT_MS:30000}
+      min-confidence: ${UI_TEST_AI_MIN_CONFIDENCE:0.7}

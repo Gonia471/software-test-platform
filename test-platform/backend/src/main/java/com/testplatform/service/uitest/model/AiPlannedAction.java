@@ -23,6 +23,11 @@ public class AiPlannedAction {
     private String locatorValue;
 
     /**
+     * 候选元素下标（优先由 AI 从候选集中选择）。
+     */
+    private Integer candidateIndex;
+
+    /**
      * 视口坐标（可选）
      */
     private Integer x;
@@ -32,6 +37,11 @@ public class AiPlannedAction {
      * 输入类动作文本
      */
     private String text;
+
+    /**
+     * wait 动作等待秒数（可选）。
+     */
+    private Integer waitSeconds;
 
     /**
      * AI 置信度（可选）

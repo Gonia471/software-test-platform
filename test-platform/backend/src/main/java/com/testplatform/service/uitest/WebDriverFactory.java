@@ -2,6 +2,7 @@ package com.testplatform.service.uitest;
 
 import com.testplatform.service.uitest.model.ExecutionOptions;
 import org.openqa.selenium.PageLoadStrategy;
+import org.openqa.selenium.Point;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.remote.RemoteWebDriver;
@@ -117,12 +118,24 @@ public class WebDriverFactory {
 
         chromeOptions.addArguments("--remote-allow-origins=*");
         chromeOptions.addArguments("--window-size=1280,800");
+        if (!headlessMode) {
+            chromeOptions.addArguments("--window-position=0,0");
+        }
 
         log.info("[ChromeDriver] 正在启动 Chrome 浏览器");
         log.info("[ChromeDriver] ChromeOptions: {}", chromeOptions.asMap());
 
         try {
-            return new ChromeDriver(chromeOptions);
+            ChromeDriver driver = new ChromeDriver(chromeOptions);
+            if (!headlessMode) {
+                try {
+                    driver.manage().window().setPosition(new Point(0, 0));
+                    driver.manage().window().maximize();
+                } catch (Exception e) {
+                    log.debug("[ChromeDriver] 浏览器窗口前置/最大化失败: {}", e.getMessage());
+                }
+            }
+            return driver;
         } catch (Exception e) {
             log.error("[ChromeDriver] 启动失败，切换为无头模式: {}", e.getMessage());
             chromeOptions.addArguments("--headless=new");
