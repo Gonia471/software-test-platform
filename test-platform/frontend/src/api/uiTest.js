@@ -10,6 +10,26 @@ export function getCasesByOrganization(orgId) {
   return request.get(`/ui-test/test-cases/organization/${orgId}`)
 }
 
+/** 获取指定组织下的 UI 用例分类 */
+export function getCategoriesByOrganization(orgId) {
+  return request.get(`/ui-test/categories/organization/${orgId}`)
+}
+
+/** 创建 UI 用例分类 */
+export function createCategory(data) {
+  return request.post('/ui-test/categories', data)
+}
+
+/** 更新 UI 用例分类 */
+export function updateCategory(id, data) {
+  return request.put(`/ui-test/categories/${id}`, data)
+}
+
+/** 删除 UI 用例分类 */
+export function deleteCategory(id) {
+  return request.delete(`/ui-test/categories/${id}`)
+}
+
 /** 创建用例 */
 export function createCase(data) {
   return request.post('/ui-test/test-cases', data)
@@ -72,4 +92,22 @@ export function getExecutionDetail(id) {
 /** 停止执行 */
 export function stopExecution(id) {
   return request.post(`/ui-test/executions/${id}/stop`)
+}
+
+/** 上传 AI 视觉图片资产 */
+export function uploadAiVisionAsset(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post('/ui-test/ai/assets/upload', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+}
+
+/** 拉取 AI 视觉图片资产，用于带鉴权预览 */
+export function fetchAiVisionAssetBlob(assetId) {
+  return request.get(`/ui-test/ai/assets/${assetId}`, {
+    responseType: 'blob',
+  })
 }

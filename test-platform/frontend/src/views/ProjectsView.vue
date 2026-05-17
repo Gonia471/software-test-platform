@@ -178,7 +178,7 @@
               <div class="item-source">
                 <div class="item-section__head">
                   <h4>{{ sourceTitle }}</h4>
-                  <span>{{ sourceItems.length }} 项可选</span>
+                  <span>{{ sourceItems.length }} 项可选，可重复添加</span>
                 </div>
                 <div class="item-list">
                   <div v-for="item in sourceItems" :key="item.id" class="item-card">
@@ -194,17 +194,27 @@
               <div class="item-target">
                 <div class="item-section__head">
                   <h4>已编排项</h4>
-                  <span>{{ selectedItems.length }} 项</span>
+                  <span>{{ selectedItems.length }} 项，支持单项循环</span>
                 </div>
-                <draggable v-model="selectedItems" item-key="id" class="item-list" handle=".drag-handle">
+                <draggable v-model="selectedItems" item-key="entryKey" class="item-list" handle=".drag-handle">
                   <template #item="{ element, index }">
                     <div class="item-card is-selected">
                       <div class="item-card__content">
                         <span class="drag-handle">::</span>
                         <span class="item-index">{{ index + 1 }}</span>
                         <span class="item-name">{{ element.name }}</span>
+                        <span class="item-subtitle">{{ element.subtitle }}</span>
                       </div>
-                      <el-button type="danger" link @click="removeItem(index)">移除</el-button>
+                      <div class="item-card__actions">
+                        <el-input-number
+                          v-model="element.itemLoopCount"
+                          :min="1"
+                          :max="100"
+                          size="small"
+                          class="item-loop-input"
+                        />
+                        <el-button type="danger" link @click="removeItem(index)">移除</el-button>
+                      </div>
                     </div>
                   </template>
                 </draggable>
@@ -262,6 +272,7 @@ const projects = ref([])
 const instances = ref([])
 const rawAvailableItems = ref([])
 const selectedItems = ref([])
+const itemEntrySeed = ref(0)
 
 const dialogVisible = ref(false)
 const dialogLoading = ref(false)
@@ -272,10 +283,7 @@ const scheduleForm = reactive(createEmptyScheduleForm())
 
 const dialogTitle = computed(() => (dialogMode.value === 'create' ? '创建项目合集' : '编辑项目合集'))
 
-const sourceItems = computed(() => {
-  const selectedIds = new Set(selectedItems.value.map((item) => item.id))
-  return rawAvailableItems.value.filter((item) => !selectedIds.has(item.id))
-})
+const sourceItems = computed(() => rawAvailableItems.value)
 
 const sourceTitle = computed(() => (dialogForm.type === 'UI' ? '可选 UI 用例' : '可选 API 用例'))
 
@@ -344,6 +352,7 @@ function resetDialogState() {
   Object.assign(scheduleForm, createEmptyScheduleForm())
   selectedItems.value = []
   rawAvailableItems.value = []
+  itemEntrySeed.value = 0
 }
 
 async function fetchProjects() {
@@ -430,11 +439,7 @@ function isOwner(project) {
 
 function enterProject(project) {
   projectStore.setCurrentProject(project.id)
-  if (project.type === 'UI') {
-    router.push('/ui-test')
-  } else {
-    router.push('/api-test')
-  }
+  openEditDialog(project)
 }
 
 async function runProject(project) {
@@ -491,12 +496,15 @@ function restoreSelectedItems(itemsJson, candidates, projectType) {
       .map((item) => {
         if (typeof item === 'number') {
           const matched = candidates.find((candidate) => candidate.id === item)
-          return matched || {
-            id: item,
-            name: `历史资源 #${item}`,
-            itemType: projectType === 'UI' ? 'CASE' : 'CASE',
-            subtitle: '旧版数据',
-          }
+          return createSelectedEntry(
+            matched || {
+              id: item,
+              name: `历史资源 #${item}`,
+              itemType: projectType === 'UI' ? 'CASE' : 'CASE',
+              subtitle: '旧版数据',
+            },
+            1
+          )
         }
 
         const itemId = Number(item.itemId ?? item.id)
@@ -504,13 +512,14 @@ function restoreSelectedItems(itemsJson, candidates, projectType) {
           return null
         }
         const matched = candidates.find((candidate) => candidate.id === itemId)
-        return (
+        return createSelectedEntry(
           matched || {
             id: itemId,
             name: item.name || `历史资源 #${itemId}`,
             itemType: item.itemType || 'CASE',
             subtitle: '旧版数据',
-          }
+          },
+          Number(item.itemLoopCount || item.loopCount || 1)
         )
       })
       .filter(Boolean)
@@ -519,8 +528,21 @@ function restoreSelectedItems(itemsJson, candidates, projectType) {
   }
 }
 
+function nextEntryKey() {
+  itemEntrySeed.value += 1
+  return `entry-${Date.now()}-${itemEntrySeed.value}`
+}
+
+function createSelectedEntry(item, itemLoopCount = 1) {
+  return {
+    ...item,
+    entryKey: nextEntryKey(),
+    itemLoopCount: Math.max(1, Number(itemLoopCount || 1)),
+  }
+}
+
 function addItem(item) {
-  selectedItems.value.push({ ...item })
+  selectedItems.value.push(createSelectedEntry(item, 1))
 }
 
 function removeItem(index) {
@@ -640,6 +662,7 @@ function buildPayload() {
         itemId: item.id,
         itemType: item.itemType,
         name: item.name,
+        itemLoopCount: Math.max(1, Number(item.itemLoopCount || 1)),
       }))
     ),
   }
@@ -1000,6 +1023,13 @@ async function deleteProject(project) {
   flex: 1;
 }
 
+.item-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .item-index {
   font-weight: bold;
   color: #409eff;
@@ -1019,6 +1049,10 @@ async function deleteProject(project) {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.item-loop-input {
+  width: 92px;
 }
 
 .drag-handle {

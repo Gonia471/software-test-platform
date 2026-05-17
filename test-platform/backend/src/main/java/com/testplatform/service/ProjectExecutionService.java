@@ -98,15 +98,19 @@ public class ProjectExecutionService {
         for (int i = 0; i < loops; i++) {
             log.info("项目 {} 第 {} 次循环开始", project.getName(), i + 1);
             for (ProjectItemRef item : items) {
-                try {
-                    if ("API".equalsIgnoreCase(project.getType())) {
-                        log.info("执行 API 用例: {}", item.itemId());
-                        apiEngine.execute(item.itemId(), executionUser, project.getId());
-                    } else if ("UI".equalsIgnoreCase(project.getType())) {
-                        executeUiItem(project, item, executionUser, visiting);
+                int itemLoops = item.loopCount() != null && item.loopCount() > 0 ? item.loopCount() : 1;
+                for (int itemLoopIndex = 0; itemLoopIndex < itemLoops; itemLoopIndex++) {
+                    try {
+                        if ("API".equalsIgnoreCase(project.getType())) {
+                            log.info("执行 API 用例: {}, 单项循环 {}/{}", item.itemId(), itemLoopIndex + 1, itemLoops);
+                            apiEngine.execute(item.itemId(), executionUser, project.getId());
+                        } else if ("UI".equalsIgnoreCase(project.getType())) {
+                            log.info("执行 UI 编排项: {}, 单项循环 {}/{}", item.itemId(), itemLoopIndex + 1, itemLoops);
+                            executeUiItem(project, item, executionUser, visiting);
+                        }
+                    } catch (Exception e) {
+                        log.error("执行项目项失败: itemId={}, projectId={}, itemLoop={}", item.itemId(), project.getId(), itemLoopIndex + 1, e);
                     }
-                } catch (Exception e) {
-                    log.error("执行项目项失败: itemId={}, projectId={}", item.itemId(), project.getId(), e);
                 }
             }
         }
@@ -169,7 +173,8 @@ public class ProjectExecutionService {
                             node.asLong(),
                             defaultItemType(project.getType()),
                             null,
-                            null));
+                            null,
+                            1));
                     continue;
                 }
 
@@ -185,7 +190,8 @@ public class ProjectExecutionService {
                         itemId,
                         readNormalizedText(node, "itemType", defaultItemType(project.getType())),
                         readText(node, "name", null),
-                        readLong(node, "instanceId")));
+                        readLong(node, "instanceId"),
+                        readInt(node, "itemLoopCount", readInt(node, "loopCount", 1))));
             }
             return items;
         } catch (Exception e) {
@@ -230,6 +236,24 @@ public class ProjectExecutionService {
         return text == null ? null : text.toUpperCase();
     }
 
-    private record ProjectItemRef(Long itemId, String itemType, String name, Long instanceId) {
+    private Integer readInt(JsonNode node, String fieldName, Integer defaultValue) {
+        JsonNode value = node.get(fieldName);
+        if (value == null || value.isNull()) {
+            return defaultValue;
+        }
+        if (value.isInt() || value.isLong() || value.isNumber()) {
+            return Math.max(1, value.asInt());
+        }
+        if (value.isTextual()) {
+            try {
+                return Math.max(1, Integer.parseInt(value.asText().trim()));
+            } catch (NumberFormatException ignored) {
+                return defaultValue;
+            }
+        }
+        return defaultValue;
+    }
+
+    private record ProjectItemRef(Long itemId, String itemType, String name, Long instanceId, Integer loopCount) {
     }
 }

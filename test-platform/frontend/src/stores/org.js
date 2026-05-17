@@ -10,12 +10,30 @@ export const useOrgStore = defineStore('org', () => {
   )
 
   async function fetchOrganizations() {
-    const res = await getUserOrganizations()
-    organizations.value = res.data || []
+    try {
+      const res = await getUserOrganizations()
+      organizations.value = res.data || []
 
-    if (organizations.value.length > 0 && !currentOrganizationId.value) {
-      setCurrentOrganization(organizations.value[0].id)
+      const hasCurrentOrganization = organizations.value.some(
+        o => Number(o.id) === Number(currentOrganizationId.value)
+      )
+
+      if (organizations.value.length > 0) {
+        if (!currentOrganizationId.value || !hasCurrentOrganization) {
+          setCurrentOrganization(organizations.value[0].id)
+        }
+      } else {
+        currentOrganizationId.value = null
+        localStorage.removeItem('currentOrganizationId')
+      }
+    } catch (err) {
+      console.error('获取组织列表失败:', err)
+      organizations.value = []
+      currentOrganizationId.value = null
+      localStorage.removeItem('currentOrganizationId')
+      return []
     }
+    return organizations.value
   }
 
   function setCurrentOrganization(id) {

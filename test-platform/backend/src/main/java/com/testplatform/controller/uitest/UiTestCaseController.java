@@ -1,9 +1,13 @@
 package com.testplatform.controller.uitest;
 
 import com.testplatform.dto.uitest.CreateOrUpdateCaseRequest;
+import com.testplatform.dto.uitest.CreateUiTestCategoryRequest;
 import com.testplatform.dto.uitest.UiTestCaseDto;
+import com.testplatform.dto.uitest.UiTestCategoryDto;
+import com.testplatform.dto.uitest.UpdateUiTestCategoryRequest;
 import com.testplatform.entity.User;
 import com.testplatform.service.uitest.UiTestCaseService;
+import com.testplatform.service.uitest.UiTestCategoryService;
 import com.testplatform.service.uitest.XPathPreviewService;
 import com.testplatform.service.uitest.handler.LocatorSupport;
 import com.testplatform.util.SecurityUtils;
@@ -18,10 +22,15 @@ import java.util.Map;
 public class UiTestCaseController {
 
     private final UiTestCaseService testCaseService;
+    private final UiTestCategoryService testCategoryService;
     private final XPathPreviewService xpathPreviewService;
 
-    public UiTestCaseController(UiTestCaseService testCaseService, XPathPreviewService xpathPreviewService) {
+    public UiTestCaseController(
+            UiTestCaseService testCaseService,
+            UiTestCategoryService testCategoryService,
+            XPathPreviewService xpathPreviewService) {
         this.testCaseService = testCaseService;
+        this.testCategoryService = testCategoryService;
         this.xpathPreviewService = xpathPreviewService;
     }
 
@@ -64,6 +73,31 @@ public class UiTestCaseController {
     @DeleteMapping("/test-cases/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         testCaseService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/categories/organization/{orgId}")
+    public ResponseEntity<List<UiTestCategoryDto>> listCategoriesByOrganization(@PathVariable Long orgId) {
+        User user = SecurityUtils.getCurrentUser();
+        return ResponseEntity.ok(testCategoryService.listByOrganization(orgId, user));
+    }
+
+    @PostMapping("/categories")
+    public ResponseEntity<UiTestCategoryDto> createCategory(@RequestBody CreateUiTestCategoryRequest req) {
+        User user = SecurityUtils.getCurrentUser();
+        return ResponseEntity.ok(testCategoryService.create(req, user));
+    }
+
+    @PutMapping("/categories/{id}")
+    public ResponseEntity<UiTestCategoryDto> updateCategory(@PathVariable Long id, @RequestBody UpdateUiTestCategoryRequest req) {
+        User user = SecurityUtils.getCurrentUser();
+        return ResponseEntity.ok(testCategoryService.update(id, req, user));
+    }
+
+    @DeleteMapping("/categories/{id}")
+    public ResponseEntity<Void> deleteCategory(@PathVariable Long id) {
+        User user = SecurityUtils.getCurrentUser();
+        testCategoryService.delete(id, user);
         return ResponseEntity.noContent().build();
     }
 

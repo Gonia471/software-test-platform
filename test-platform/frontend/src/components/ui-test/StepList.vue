@@ -226,7 +226,9 @@ function formatParamsPreview(step) {
     case 'aiNaturalLanguage':
       return `指令: ${p.instruction || '-'}`
     case 'aiImageClick':
-      return p.imagePath ? `截图: ${p.imagePath}` : '请上传截图'
+      return p.assetName || p.imagePath
+        ? `模式: ${p.mode === 'template' ? '目标小图' : '框选区域'}，图片: ${p.assetName || p.imagePath}`
+        : '请上传截图或粘贴图片'
     default:
       return '未配置参数'
   }

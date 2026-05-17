@@ -115,6 +115,7 @@ import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { useOrgStore } from '../stores/org'
+import { ElMessage } from 'element-plus'
 import {
   Odometer,
   FolderOpened,
@@ -137,8 +138,11 @@ const orgStore = useOrgStore()
 
 const isCollapse = ref(false)
 
-onMounted(() => {
-  orgStore.fetchOrganizations()
+onMounted(async () => {
+  const organizations = await orgStore.fetchOrganizations()
+  if (!organizations.length) {
+    ElMessage.warning('当前无法获取组织列表，请确认登录状态或组织权限')
+  }
 })
 
 const activeMenu = computed(() => {

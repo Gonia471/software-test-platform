@@ -98,11 +98,12 @@ public class UiTestExecutionEngine {
 
                 StepDefinition step = steps.get(i);
                 UiExecutionStep stepRecord = initStepRecord(execution, i, step);
+                ctx.getVariables().put("currentStepIndex", i + 1);
                 try {
                     StepResult result = stepDispatcher.dispatch(step, ctx);
                     fillStepSuccess(stepRecord, result);
                     // 每步快照：步骤执行完成后的页面状态
-                    if (driver instanceof TakesScreenshot ts && options.isScreenshotEveryStep()) {
+                    if (result.getScreenshotPath() == null && driver instanceof TakesScreenshot ts && options.isScreenshotEveryStep()) {
                         try {
                             String path = saveScreenshot(ts, screenshotRoot, i + 1);
                             stepRecord.setScreenshotPath(path);

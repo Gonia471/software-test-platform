@@ -22,8 +22,22 @@
 
     <div class="org-page-header">
       <div class="header-actions">
+        <el-button
+          :type="batchSelectMode ? 'primary' : 'default'"
+          plain
+          @click="toggleBatchSelectMode"
+        >
+          {{ batchSelectMode ? '退出多选' : '批量选择' }}
+        </el-button>
+        <el-button
+          plain
+          :disabled="orgStore.organizations.length === 0"
+          @click="toggleSelectAll"
+        >
+          {{ allSelected ? '取消全选' : '全选' }}
+        </el-button>
         <el-dropdown @command="handleBatchCommand">
-          <el-button plain>
+          <el-button plain :disabled="selectedOrgIds.length === 0">
             批量操作
             <el-icon class="el-icon--right"><ArrowDown /></el-icon>
           </el-button>
@@ -53,9 +67,16 @@
         v-for="org in orgStore.organizations"
         :key="org.id"
         class="org-item"
-        :class="{ 'is-selected': selectedOrgIds.includes(org.id) }"
+        :class="{ 'is-selected': selectedOrgIds.includes(org.id), 'is-batch-mode': batchSelectMode }"
+        @click="handleOrgCardClick(org)"
       >
-        <div class="org-item-main" @click="goToMembers(org)">
+        <div v-if="batchSelectMode" class="org-select-check" @click.stop="toggleOrgSelection(org.id)">
+          <el-checkbox
+            :model-value="selectedOrgIds.includes(org.id)"
+            @change="() => toggleOrgSelection(org.id)"
+          />
+        </div>
+        <div class="org-item-main">
           <div class="org-avatar" :style="{ backgroundColor: org.color }">
             {{ org.name.charAt(0).toUpperCase() }}
           </div>
@@ -94,15 +115,15 @@
           >
             {{ selectedOrgIds.includes(org.id) ? '已选' : '选择' }}
           </el-button>
-          <el-button type="primary" plain @click.stop="goToMembers(org)">
+          <el-button type="primary" plain @click.stop="goToMembers(org)" :disabled="batchSelectMode">
             <el-icon><UserFilled /></el-icon>
             人员
           </el-button>
-          <el-button plain @click.stop="editOrg(org)">
+          <el-button plain @click.stop="editOrg(org)" :disabled="batchSelectMode">
             <el-icon><Edit /></el-icon>
             编辑
           </el-button>
-          <el-button type="danger" plain @click.stop="deleteOrg(org)">
+          <el-button type="danger" plain @click.stop="deleteOrg(org)" :disabled="batchSelectMode">
             <el-icon><Delete /></el-icon>
             删除
           </el-button>
@@ -249,7 +270,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -284,9 +305,15 @@ const invitations = ref([])
 const currentOrgId = ref(null)
 const members = ref([])
 const selectedOrgIds = ref([])
+const batchSelectMode = ref(false)
 
 const currentOrg = computed(() =>
   orgStore.organizations.find((o) => o.id === currentOrgId.value)
+)
+
+const allSelected = computed(() =>
+  orgStore.organizations.length > 0
+  && selectedOrgIds.value.length === orgStore.organizations.length
 )
 
 const form = reactive({ name: '', description: '', color: '#409EFF' })
@@ -297,11 +324,26 @@ onMounted(() => {
   orgStore.fetchOrganizations()
 })
 
+watch(
+  () => orgStore.organizations.map((org) => org.id),
+  (ids) => {
+    selectedOrgIds.value = selectedOrgIds.value.filter((id) => ids.includes(id))
+    if (selectedOrgIds.value.length === 0) {
+      batchSelectMode.value = false
+    }
+  },
+  { immediate: true },
+)
+
 function goBack() {
   router.push('/dashboard')
 }
 
 async function goToMembers(org) {
+  if (batchSelectMode.value) {
+    toggleOrgSelection(org.id)
+    return
+  }
   currentOrgId.value = org.id
   orgStore.setCurrentOrganization(org.id)
   showMembersDialog.value = true
@@ -402,10 +444,36 @@ function toggleOrgSelection(id) {
   } else {
     selectedOrgIds.value = [...selectedOrgIds.value, id]
   }
+  batchSelectMode.value = selectedOrgIds.value.length > 0
 }
 
 function clearSelectedOrgs() {
   selectedOrgIds.value = []
+  batchSelectMode.value = false
+}
+
+function toggleBatchSelectMode() {
+  batchSelectMode.value = !batchSelectMode.value
+  if (!batchSelectMode.value) {
+    selectedOrgIds.value = []
+  }
+}
+
+function toggleSelectAll() {
+  if (allSelected.value) {
+    clearSelectedOrgs()
+    return
+  }
+  selectedOrgIds.value = orgStore.organizations.map((org) => org.id)
+  batchSelectMode.value = true
+}
+
+function handleOrgCardClick(org) {
+  if (batchSelectMode.value) {
+    toggleOrgSelection(org.id)
+    return
+  }
+  goToMembers(org)
 }
 
 function handleBatchCommand(command) {
@@ -591,6 +659,7 @@ function formatDate(dateStr) {
   flex-direction: column;
   gap: 16px;
   transition: var(--transition);
+  position: relative;
 }
 
 .org-item:hover {
@@ -602,6 +671,22 @@ function formatDate(dateStr) {
 .org-item.is-selected {
   border-color: rgba(59, 130, 246, 0.38);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
+}
+
+.org-item.is-batch-mode {
+  cursor: pointer;
+}
+
+.org-select-check {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 1;
+  padding: 4px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
 }
 
 .org-item-main {

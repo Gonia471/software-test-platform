@@ -177,7 +177,20 @@ export function createStepFromAction(action, groupType) {
       return {
         ...base,
         parameters: {
+          mode: 'crop',
+          instruction: '',
+          assetId: '',
+          assetName: '',
           imagePath: '',
+          previewUrl: '',
+          sourceType: 'upload',
+          threshold: 0.82,
+          box: {
+            xRatio: 0,
+            yRatio: 0,
+            widthRatio: 0,
+            heightRatio: 0,
+          },
         },
       }
     default:

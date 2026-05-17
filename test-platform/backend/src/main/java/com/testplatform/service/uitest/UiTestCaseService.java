@@ -31,6 +31,7 @@ public class UiTestCaseService {
     private final OrganizationRepository organizationRepository;
     private final OrganizationMemberRepository memberRepository;
     private final OrganizationPermissionService permissionService;
+    private final UiTestCategoryService testCategoryService;
     private final ObjectMapper objectMapper;
 
     public UiTestCaseService(
@@ -39,12 +40,14 @@ public class UiTestCaseService {
             OrganizationRepository organizationRepository,
             OrganizationMemberRepository memberRepository,
             OrganizationPermissionService permissionService,
+            UiTestCategoryService testCategoryService,
             ObjectMapper objectMapper) {
         this.testCaseRepository = testCaseRepository;
         this.executionRepository = executionRepository;
         this.organizationRepository = organizationRepository;
         this.memberRepository = memberRepository;
         this.permissionService = permissionService;
+        this.testCategoryService = testCategoryService;
         this.objectMapper = objectMapper;
     }
 
@@ -65,6 +68,7 @@ public class UiTestCaseService {
                 throw new IllegalArgumentException("无权限在该组织创建用例");
             }
             entity.setOrganization(org);
+            testCategoryService.ensureCategoryExists(org.getId(), req.getModuleKey(), user);
         }
 
         if (req.getProjectId() != null && entity.getOrganization() != null) {
@@ -94,7 +98,12 @@ public class UiTestCaseService {
 
         if (req.getName() != null) entity.setName(req.getName());
         if (req.getDescription() != null) entity.setDescription(req.getDescription());
-        if (req.getModuleKey() != null) entity.setModuleKey(req.getModuleKey().trim());
+        if (req.getModuleKey() != null) {
+            entity.setModuleKey(req.getModuleKey().trim());
+            if (entity.getOrganization() != null) {
+                testCategoryService.ensureCategoryExists(entity.getOrganization().getId(), entity.getModuleKey(), user);
+            }
+        }
         if (req.getSteps() != null) entity.setStepsJson(writeSteps(req.getSteps()));
         UiTestCase saved = testCaseRepository.save(entity);
         return toDto(saved);

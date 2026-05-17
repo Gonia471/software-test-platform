@@ -267,22 +267,128 @@
         </template>
 
         <template v-else-if="activeActionKey === 'aiImageClick'">
-          <el-form-item label="上传截图">
-            <el-upload
-              class="upload"
-              action="#"
-              :auto-upload="false"
-              :show-file-list="false"
-              :on-change="onImageChange"
+          <el-form-item label="文字提示">
+            <el-input
+              v-model="localStep.parameters.instruction"
+              type="textarea"
+              :rows="2"
+              placeholder="例如：点击截图中蓝色的搜索按钮"
+              @change="emitChange"
+            />
+          </el-form-item>
+
+          <el-form-item label="识别模式">
+            <el-radio-group
+              v-model="localStep.parameters.mode"
+              @change="onImageModeChange"
             >
-              <el-button type="primary" plain>选择截图文件</el-button>
-            </el-upload>
-            <p v-if="localStep.parameters.imagePath" class="upload-tip">
-              已选择：{{ localStep.parameters.imagePath }}
-            </p>
-            <p class="upload-tip">
-              仅前端演示：实际识别与点击逻辑将在后端/执行引擎中实现
-            </p>
+              <el-radio-button label="crop">框选区域点击</el-radio-button>
+              <el-radio-button label="template">目标小图点击</el-radio-button>
+            </el-radio-group>
+          </el-form-item>
+
+          <el-form-item label="图片输入">
+            <div
+              class="image-upload-panel"
+              :class="{ 'is-dragover': isImageDragOver, 'is-uploading': uploadPending }"
+              tabindex="0"
+              @paste="onImagePaste"
+              @dragover.prevent="onImageDragOver"
+              @dragleave.prevent="onImageDragLeave"
+              @drop.prevent="onImageDrop"
+            >
+              <el-upload
+                class="upload"
+                action="#"
+                accept="image/*"
+                :auto-upload="false"
+                :show-file-list="false"
+                :on-change="onImageChange"
+              >
+                <el-button type="primary" plain :loading="uploadPending">
+                  选择截图文件
+                </el-button>
+              </el-upload>
+              <el-button
+                v-if="localStep.parameters.previewUrl"
+                size="small"
+                text
+                type="danger"
+                @click="clearImageSelection"
+              >
+                清空图片
+              </el-button>
+              <p class="upload-tip">
+                支持选择文件、拖拽图片、Ctrl+V 粘贴剪贴板截图
+              </p>
+              <p class="upload-tip">
+                {{
+                  localStep.parameters.mode === 'crop'
+                    ? '上传整张截图后，在预览图上框出要点击的目标区域'
+                    : '上传目标控件的小图，执行时将按模板匹配点击'
+                }}
+              </p>
+              <p v-if="localStep.parameters.assetId" class="upload-tip">
+                资源已保存：{{ localStep.parameters.assetName || localStep.parameters.imagePath }}
+              </p>
+            </div>
+          </el-form-item>
+
+          <el-form-item v-if="currentImagePreviewUrl || localStep.parameters.assetId" label="图片预览">
+            <div class="image-preview-panel">
+              <div class="image-preview-toolbar">
+                <div class="image-preview-meta">
+                  <span class="image-preview-name">
+                    {{ localStep.parameters.assetName || localStep.parameters.imagePath || '未命名图片' }}
+                  </span>
+                  <el-tag size="small" effect="plain">
+                    {{ localStep.parameters.sourceType || 'upload' }}
+                  </el-tag>
+                </div>
+                <span v-if="hasSelectedBox" class="image-selection-summary">
+                  已框选目标区域
+                </span>
+              </div>
+
+              <div
+                ref="imageBoardRef"
+                class="image-board"
+                :class="{ 'is-crop-mode': localStep.parameters.mode === 'crop' }"
+                @mousedown="onSelectionStart"
+              >
+                <img
+                  ref="imagePreviewRef"
+                  class="image-preview"
+                  :src="currentImagePreviewUrl"
+                  alt="上传预览"
+                  @load="onPreviewImageLoad"
+                >
+                <div
+                  v-if="selectionBoxStyle"
+                  class="selection-box"
+                  :style="selectionBoxStyle"
+                />
+              </div>
+
+              <p class="upload-tip">
+                {{
+                  localStep.parameters.mode === 'crop'
+                    ? '鼠标拖拽框选目标区域，系统将保存相对坐标用于后端裁剪'
+                    : '当前模式无需框选，后端会直接把整张图片作为模板图'
+                }}
+              </p>
+            </div>
+          </el-form-item>
+
+          <el-form-item label="匹配阈值">
+            <el-input-number
+              v-model="localStep.parameters.threshold"
+              :min="0.1"
+              :max="1"
+              :step="0.01"
+              :precision="2"
+              @change="emitChange"
+            />
           </el-form-item>
         </template>
 
@@ -311,9 +417,15 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import { locatorOptions, actionGroups, createStepFromAction } from '../../views/uiTestActions'
-import { previewXpathFast, previewXpathWithContext } from '../../api/uiTest'
+import {
+  fetchAiVisionAssetBlob,
+  previewXpathFast,
+  previewXpathWithContext,
+  uploadAiVisionAsset,
+} from '../../api/uiTest'
 
 const props = defineProps({
   step: {
@@ -348,8 +460,22 @@ const displayOrder = ref(1)
 const selectedGroupType = ref('')
 const selectedActionKey = ref('')
 const xpathPreview = ref(null)
+const imageBoardRef = ref(null)
+const imagePreviewRef = ref(null)
+const isImageDragOver = ref(false)
+const uploadPending = ref(false)
+const boardMetrics = ref({ width: 0, height: 0 })
+const objectPreviewUrl = ref('')
 let xpathPreviewTimer = null
 let xpathPreviewRequestId = 0
+
+const selectionDraft = reactive({
+  active: false,
+  startX: 0,
+  startY: 0,
+  currentX: 0,
+  currentY: 0,
+})
 
 const currentActions = computed(() => {
   const group = actionGroups.find((g) => g.type === selectedGroupType.value)
@@ -365,6 +491,80 @@ const showXpathPreview = computed(() => (
   && Boolean(String(localStep.parameters?.locatorValue || '').trim())
   && Boolean(xpathPreview.value)
 ))
+
+const hasSelectedBox = computed(() => {
+  const box = localStep.parameters?.box
+  return Boolean(
+    box
+      && box.widthRatio > 0
+      && box.heightRatio > 0,
+  )
+})
+
+const currentImagePreviewUrl = computed(() => objectPreviewUrl.value || '')
+
+const selectionBoxStyle = computed(() => {
+  if (activeActionKey.value !== 'aiImageClick' || localStep.parameters?.mode !== 'crop') {
+    return null
+  }
+
+  const width = boardMetrics.value.width
+  const height = boardMetrics.value.height
+  if (!width || !height) {
+    return null
+  }
+
+  if (selectionDraft.active) {
+    const left = Math.min(selectionDraft.startX, selectionDraft.currentX)
+    const top = Math.min(selectionDraft.startY, selectionDraft.currentY)
+    const rectWidth = Math.abs(selectionDraft.currentX - selectionDraft.startX)
+    const rectHeight = Math.abs(selectionDraft.currentY - selectionDraft.startY)
+    return {
+      left: `${left}px`,
+      top: `${top}px`,
+      width: `${rectWidth}px`,
+      height: `${rectHeight}px`,
+    }
+  }
+
+  const box = localStep.parameters?.box
+  if (!box || box.widthRatio <= 0 || box.heightRatio <= 0) {
+    return null
+  }
+  return {
+    left: `${box.xRatio * width}px`,
+    top: `${box.yRatio * height}px`,
+    width: `${box.widthRatio * width}px`,
+    height: `${box.heightRatio * height}px`,
+  }
+})
+
+function defaultImageClickParameters(parameters = {}) {
+  const box = parameters.box || {}
+  return {
+    mode: parameters.mode || 'crop',
+    instruction: parameters.instruction || '',
+    assetId: parameters.assetId || '',
+    assetName: parameters.assetName || '',
+    imagePath: parameters.imagePath || '',
+    previewUrl: parameters.previewUrl || '',
+    sourceType: parameters.sourceType || 'upload',
+    threshold: typeof parameters.threshold === 'number' ? parameters.threshold : 0.82,
+    box: {
+      xRatio: Number(box.xRatio || 0),
+      yRatio: Number(box.yRatio || 0),
+      widthRatio: Number(box.widthRatio || 0),
+      heightRatio: Number(box.heightRatio || 0),
+    },
+  }
+}
+
+function normalizeParameters(action, parameters = {}) {
+  if (action === 'aiImageClick') {
+    return defaultImageClickParameters(parameters)
+  }
+  return { ...parameters }
+}
 
 function setPreviewIfCurrent(requestId, preview) {
   if (requestId !== xpathPreviewRequestId) {
@@ -510,7 +710,7 @@ const knownAction = computed(() => {
 
 watch(
   () => props.step,
-  (val, oldVal) => {
+  async (val, oldVal) => {
     if (!val) return
     const nextLocatorType = val.parameters?.locatorType || ''
     const nextLocatorValue = String(val.parameters?.locatorValue || '').trim()
@@ -525,13 +725,17 @@ watch(
       xpathPreviewRequestId += 1
       xpathPreview.value = null
     }
+    const previousAssetId = oldVal?.parameters?.assetId || ''
+    const nextAssetId = val.parameters?.assetId || ''
+    if (previousAssetId !== nextAssetId) {
+      revokeObjectPreviewUrl()
+    }
+
     localStep.id = val.id
     localStep.type = val.type
     localStep.action = val.action
     localStep.description = val.description || ''
-    localStep.parameters = {
-      ...(val.parameters || {}),
-    }
+    localStep.parameters = normalizeParameters(val.action, val.parameters || {})
     let groupType = val.type
     if (!groupType) {
       const foundGroup = actionGroups.find((g) =>
@@ -544,9 +748,18 @@ watch(
     if (props.index != null && props.index >= 0) {
       displayOrder.value = props.index + 1
     }
+    await ensureImagePreviewLoaded()
   },
   { immediate: true, deep: true },
 )
+
+onBeforeUnmount(() => {
+  if (xpathPreviewTimer) {
+    clearTimeout(xpathPreviewTimer)
+  }
+  revokeObjectPreviewUrl()
+  detachSelectionListeners()
+})
 
 watch(
   () => props.index,
@@ -619,9 +832,215 @@ function emitChange() {
   })
 }
 
-function onImageChange(file) {
-  localStep.parameters.imagePath = file.name
+async function onImageChange(file) {
+  const rawFile = file?.raw || file
+  await handleImageFile(rawFile, 'upload')
+}
+
+async function handleImageFile(file, sourceType = 'upload') {
+  if (!file) return
+  if (!String(file.type || '').startsWith('image/')) {
+    ElMessage.error('仅支持上传图片文件')
+    return
+  }
+
+  const localPreview = URL.createObjectURL(file)
+  revokeObjectPreviewUrl()
+  objectPreviewUrl.value = localPreview
+  localStep.parameters = defaultImageClickParameters({
+    ...localStep.parameters,
+    assetId: '',
+    assetName: file.name || 'clipboard-image.png',
+    imagePath: file.name || 'clipboard-image.png',
+    previewUrl: localPreview,
+    sourceType,
+    box: {
+      xRatio: 0,
+      yRatio: 0,
+      widthRatio: 0,
+      heightRatio: 0,
+    },
+  })
   emitChange()
+  uploadPending.value = true
+
+  try {
+    const response = await uploadAiVisionAsset(file)
+    const data = response?.data || {}
+    localStep.parameters = defaultImageClickParameters({
+      ...localStep.parameters,
+      assetId: data.assetId || '',
+      assetName: data.fileName || localStep.parameters.assetName,
+      imagePath: data.fileName || localStep.parameters.imagePath,
+      previewUrl: data.previewUrl || localStep.parameters.previewUrl,
+      sourceType,
+    })
+    emitChange()
+    ElMessage.success('图片上传成功')
+    await nextTick()
+    updateImageBoardMetrics()
+  } catch (error) {
+    ElMessage.error(error?.message || '图片上传失败')
+  } finally {
+    uploadPending.value = false
+  }
+}
+
+function clearImageSelection() {
+  revokeObjectPreviewUrl()
+  localStep.parameters = defaultImageClickParameters()
+  emitChange()
+}
+
+function revokeObjectPreviewUrl() {
+  if (!objectPreviewUrl.value) return
+  URL.revokeObjectURL(objectPreviewUrl.value)
+  objectPreviewUrl.value = ''
+}
+
+async function ensureImagePreviewLoaded() {
+  if (localStep.action !== 'aiImageClick') {
+    revokeObjectPreviewUrl()
+    return
+  }
+
+  if (objectPreviewUrl.value || !localStep.parameters?.assetId) {
+    return
+  }
+
+  try {
+    const response = await fetchAiVisionAssetBlob(localStep.parameters.assetId)
+    const blobUrl = URL.createObjectURL(response.data)
+    objectPreviewUrl.value = blobUrl
+    await nextTick()
+    updateImageBoardMetrics()
+  } catch (error) {
+    ElMessage.error(error?.message || '图片预览加载失败')
+  }
+}
+
+function onImagePaste(event) {
+  const items = event.clipboardData?.items || []
+  for (const item of items) {
+    if (item.type && item.type.startsWith('image/')) {
+      const file = item.getAsFile()
+      if (file) {
+        handleImageFile(file, 'paste')
+        event.preventDefault()
+      }
+      return
+    }
+  }
+}
+
+function onImageDragOver() {
+  isImageDragOver.value = true
+}
+
+function onImageDragLeave() {
+  isImageDragOver.value = false
+}
+
+function onImageDrop(event) {
+  isImageDragOver.value = false
+  const file = event.dataTransfer?.files?.[0]
+  if (file) {
+    handleImageFile(file, 'drag')
+  }
+}
+
+function onImageModeChange() {
+  if (localStep.parameters.mode !== 'crop') {
+    localStep.parameters.box = {
+      xRatio: 0,
+      yRatio: 0,
+      widthRatio: 0,
+      heightRatio: 0,
+    }
+  }
+  emitChange()
+}
+
+function onPreviewImageLoad() {
+  updateImageBoardMetrics()
+}
+
+function updateImageBoardMetrics() {
+  const element = imageBoardRef.value
+  if (!element) return
+  boardMetrics.value = {
+    width: element.clientWidth,
+    height: element.clientHeight,
+  }
+}
+
+function onSelectionStart(event) {
+  if (activeActionKey.value !== 'aiImageClick' || localStep.parameters?.mode !== 'crop') {
+    return
+  }
+  if (!currentImagePreviewUrl.value || event.button !== 0) {
+    return
+  }
+  updateImageBoardMetrics()
+  const rect = imageBoardRef.value?.getBoundingClientRect()
+  if (!rect) return
+  const point = getRelativePoint(event, rect)
+  selectionDraft.active = true
+  selectionDraft.startX = point.x
+  selectionDraft.startY = point.y
+  selectionDraft.currentX = point.x
+  selectionDraft.currentY = point.y
+  document.addEventListener('mousemove', onSelectionMove)
+  document.addEventListener('mouseup', onSelectionEnd)
+  event.preventDefault()
+}
+
+function onSelectionMove(event) {
+  const rect = imageBoardRef.value?.getBoundingClientRect()
+  if (!selectionDraft.active || !rect) return
+  const point = getRelativePoint(event, rect)
+  selectionDraft.currentX = point.x
+  selectionDraft.currentY = point.y
+}
+
+function onSelectionEnd() {
+  if (!selectionDraft.active) {
+    detachSelectionListeners()
+    return
+  }
+
+  const width = boardMetrics.value.width
+  const height = boardMetrics.value.height
+  const left = Math.min(selectionDraft.startX, selectionDraft.currentX)
+  const top = Math.min(selectionDraft.startY, selectionDraft.currentY)
+  const rectWidth = Math.abs(selectionDraft.currentX - selectionDraft.startX)
+  const rectHeight = Math.abs(selectionDraft.currentY - selectionDraft.startY)
+
+  selectionDraft.active = false
+  detachSelectionListeners()
+
+  if (!width || !height || rectWidth < 4 || rectHeight < 4) {
+    return
+  }
+
+  localStep.parameters.box = {
+    xRatio: left / width,
+    yRatio: top / height,
+    widthRatio: rectWidth / width,
+    heightRatio: rectHeight / height,
+  }
+  emitChange()
+}
+
+function detachSelectionListeners() {
+  document.removeEventListener('mousemove', onSelectionMove)
+  document.removeEventListener('mouseup', onSelectionEnd)
+}
+
+function getRelativePoint(event, rect) {
+  const x = Math.min(Math.max(event.clientX - rect.left, 0), rect.width)
+  const y = Math.min(Math.max(event.clientY - rect.top, 0), rect.height)
+  return { x, y }
 }
 
 function onOrderChange(val) {
@@ -654,7 +1073,7 @@ function onActionChange(actionKey) {
   if (!previousDescription || previousDescription === previousActionLabel) {
     localStep.description = act.label
   }
-  localStep.parameters = { ...(base.parameters || {}) }
+  localStep.parameters = normalizeParameters(act.key, base.parameters || {})
   xpathPreviewRequestId += 1
   xpathPreview.value = null
   emitChange()
@@ -751,6 +1170,93 @@ function onActionChange(actionKey) {
 
 .upload {
   margin-bottom: 8px;
+}
+
+.image-upload-panel {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px dashed rgba(148, 163, 184, 0.5);
+  border-radius: 12px;
+  background: rgba(248, 251, 255, 0.9);
+  outline: none;
+}
+
+.image-upload-panel.is-dragover {
+  border-color: var(--primary-color);
+  background: rgba(239, 246, 255, 0.95);
+}
+
+.image-upload-panel.is-uploading {
+  opacity: 0.75;
+}
+
+.image-preview-panel {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.image-preview-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.image-preview-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.image-preview-name {
+  font-size: 12px;
+  color: var(--text-primary);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.image-selection-summary {
+  font-size: 11px;
+  color: var(--primary-color);
+}
+
+.image-board {
+  position: relative;
+  width: 100%;
+  min-height: 180px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0f172a;
+  border: 1px solid rgba(226, 232, 240, 0.92);
+}
+
+.image-board.is-crop-mode {
+  cursor: crosshair;
+}
+
+.image-preview {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.selection-box {
+  position: absolute;
+  border: 2px solid #3b82f6;
+  background: rgba(59, 130, 246, 0.15);
+  box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.15);
+  pointer-events: none;
 }
 
 .upload-tip {

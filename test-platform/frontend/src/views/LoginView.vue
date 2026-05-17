@@ -6,7 +6,7 @@
         <span class="auth-badge">EasyTest</span>
         <h1 class="auth-intro__title">软件测试平台</h1>
         <p class="auth-intro__desc">
-          面向毕业设计展示的统一测试工作台，支持组织、项目、API 测试、UI 自动化与报告查看。
+          面向企业研发与测试团队的统一测试工作台，支持组织协作、项目管理、API 测试、UI 自动化与报告查看。
         </p>
         <div class="auth-feature-list">
           <div class="auth-feature">
@@ -15,7 +15,7 @@
           </div>
           <div class="auth-feature">
             <strong>简洁界面</strong>
-            <span>全站已统一成清爽的蓝灰卡片风格，更适合答辩演示。</span>
+            <span>全站采用清晰统一的蓝灰卡片风格，便于日常使用与团队协作。</span>
           </div>
           <div class="auth-feature">
             <strong>协作测试</strong>

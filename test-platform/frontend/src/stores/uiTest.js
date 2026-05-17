@@ -1,20 +1,50 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { getCasesByOrganization, createCase as createCaseApi, updateCase as updateCaseApi, getCase as getCaseApi, deleteCase as deleteCaseApi } from '../api/uiTest'
+import {
+  getCasesByOrganization,
+  getCategoriesByOrganization,
+  createCategory as createCategoryApi,
+  updateCategory as updateCategoryApi,
+  deleteCategory as deleteCategoryApi,
+  createCase as createCaseApi,
+  updateCase as updateCaseApi,
+  getCase as getCaseApi,
+  deleteCase as deleteCaseApi,
+} from '../api/uiTest'
 import { useOrgStore } from './org'
-
-const defaultModules = [
-  { key: 'test', name: 'test' },
-]
 
 export const useUiTestStore = defineStore('uiTest', () => {
   const orgStore = useOrgStore()
-  const modules = ref(defaultModules)
   const cases = ref([])
+  const modules = ref([])
   const loading = ref(false)
   const error = ref(null)
-
   const selectedModuleKey = ref('all')
+
+  function normalizeModuleKey(moduleKey) {
+    return String(moduleKey || '').trim()
+  }
+
+  async function fetchModules(organizationId = orgStore.currentOrganizationId) {
+    if (!organizationId) {
+      modules.value = []
+      return []
+    }
+
+    const response = await getCategoriesByOrganization(organizationId)
+    modules.value = (response.data || []).map(item => ({
+      id: item.id ?? null,
+      key: normalizeModuleKey(item.key ?? item.moduleKey),
+      name: normalizeModuleKey(item.name ?? item.displayName ?? item.key ?? item.moduleKey),
+      caseCount: Number(item.caseCount ?? 0),
+      deletable: Boolean(item.deletable ?? Number(item.caseCount ?? 0) === 0),
+    })).filter(item => item.key && item.name)
+
+    if (selectedModuleKey.value !== 'all' && !modules.value.some(item => item.key === selectedModuleKey.value)) {
+      selectedModuleKey.value = 'all'
+    }
+    return modules.value
+  }
 
   // 从后端API获取当前组织的用例列表
   async function fetchCases(organizationId = orgStore.currentOrganizationId) {
@@ -27,10 +57,12 @@ export const useUiTestStore = defineStore('uiTest', () => {
       }
       const response = await getCasesByOrganization(organizationId)
       cases.value = response.data || []
+      await fetchModules(organizationId)
     } catch (err) {
       error.value = err.message || '获取用例列表失败'
       console.error('获取UI测试用例失败:', err)
       cases.value = []
+      modules.value = []
     } finally {
       loading.value = false
     }
@@ -47,6 +79,45 @@ export const useUiTestStore = defineStore('uiTest', () => {
 
   function setModule(moduleKey) {
     selectedModuleKey.value = moduleKey
+  }
+
+  async function addModule(moduleKey, organizationId = orgStore.currentOrganizationId) {
+    const normalized = normalizeModuleKey(moduleKey)
+    if (!normalized) {
+      throw new Error('分类名称不能为空')
+    }
+    if (!organizationId) {
+      throw new Error('请先选择所属组织')
+    }
+    const response = await createCategoryApi({
+      organizationId: Number(organizationId),
+      key: normalized,
+      name: normalized,
+    })
+    await fetchModules(organizationId)
+    return response.data
+  }
+
+  async function renameModule(id, name, organizationId = orgStore.currentOrganizationId) {
+    const normalized = normalizeModuleKey(name)
+    if (!id) {
+      throw new Error('分类标识无效')
+    }
+    if (!normalized) {
+      throw new Error('分类名称不能为空')
+    }
+
+    const response = await updateCategoryApi(id, { name: normalized })
+    await fetchModules(organizationId)
+    return response.data
+  }
+
+  async function removeModule(id, organizationId = orgStore.currentOrganizationId) {
+    if (!id) {
+      throw new Error('分类标识无效')
+    }
+    await deleteCategoryApi(id)
+    await fetchModules(organizationId)
   }
 
   const nextSeq = computed(() => {
@@ -137,6 +208,10 @@ export const useUiTestStore = defineStore('uiTest', () => {
     error,
     selectedModuleKey,
     filteredCases,
+    fetchModules,
+    addModule,
+    renameModule,
+    removeModule,
     setModule,
     findCaseById,
     createCase,

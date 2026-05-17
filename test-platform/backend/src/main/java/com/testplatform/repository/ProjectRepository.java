@@ -3,6 +3,7 @@ package com.testplatform.repository;
 import com.testplatform.entity.Organization;
 import com.testplatform.entity.Project;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -75,4 +76,26 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
 
     @Query("SELECT COUNT(p) FROM Project p WHERE p.organization.id = :orgId")
     int countByOrganizationId(@Param("orgId") Long orgId);
+
+    @Query("SELECT COUNT(p) FROM Project p WHERE p.organization.id = :orgId AND p.type = :type")
+    int countByOrganizationIdAndType(@Param("orgId") Long orgId, @Param("type") String type);
+
+    @Query("SELECT COUNT(p) FROM Project p WHERE p.organization.id = :orgId AND p.enabled = true")
+    int countEnabledByOrganizationId(@Param("orgId") Long orgId);
+
+    @Query("""
+            SELECT COUNT(p)
+            FROM Project p
+            WHERE p.organization.id = :orgId
+              AND p.enabled = true
+              AND p.cronExpression IS NOT NULL
+              AND TRIM(p.cronExpression) <> ''
+            """)
+    int countScheduledByOrganizationId(@Param("orgId") Long orgId);
+
+    @Query("SELECT p.id FROM Project p WHERE p.organization.id = :orgId")
+    List<Long> findIdsByOrganizationId(@Param("orgId") Long orgId);
+
+    @Query("SELECT p FROM Project p JOIN FETCH p.owner WHERE p.organization.id = :orgId ORDER BY p.updatedAt DESC")
+    List<Project> findRecentByOrganizationId(@Param("orgId") Long orgId, Pageable pageable);
 }

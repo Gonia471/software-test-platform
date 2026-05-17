@@ -90,7 +90,55 @@
 
           <div v-if="s.rawStepJson" class="detail-section">
             <div class="detail-label">📋 步骤参数</div>
-            <pre class="detail-content">{{ formatStepParams(s.rawStepJson) }}</pre>
+            <div class="detail-content step-param-card">
+              <div class="param-summary">
+                <div class="param-summary-main">
+                  <span class="param-type-chip">{{ parseStepParams(s.rawStepJson).typeLabel }}</span>
+                  <span class="param-action-title">{{ parseStepParams(s.rawStepJson).actionLabel }}</span>
+                  <span v-if="parseStepParams(s.rawStepJson).description" class="param-description">
+                    {{ parseStepParams(s.rawStepJson).description }}
+                  </span>
+                </div>
+              </div>
+
+              <div v-if="parseStepParams(s.rawStepJson).parameterEntries.length" class="param-grid">
+                <div
+                  v-for="entry in parseStepParams(s.rawStepJson).parameterEntries"
+                  :key="entry.key"
+                  class="param-item"
+                  :class="{ 'is-block': entry.block }"
+                >
+                  <div class="param-key">{{ entry.label }}</div>
+                  <div class="param-value">
+                    <template v-if="entry.kind === 'box'">
+                      <div class="param-box-grid">
+                        <span>左: {{ entry.value.xRatio }}</span>
+                        <span>上: {{ entry.value.yRatio }}</span>
+                        <span>宽: {{ entry.value.widthRatio }}</span>
+                        <span>高: {{ entry.value.heightRatio }}</span>
+                      </div>
+                    </template>
+                    <template v-else-if="entry.kind === 'list'">
+                      <span
+                        v-for="tag in entry.value"
+                        :key="tag"
+                        class="param-inline-tag"
+                      >
+                        {{ tag }}
+                      </span>
+                    </template>
+                    <template v-else>
+                      <span :class="{ 'param-multiline': entry.block }">{{ entry.value }}</span>
+                    </template>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="parseStepParams(s.rawStepJson).locatorSummary" class="param-locator">
+                <div class="param-key">定位表达式</div>
+                <div class="param-locator-value">{{ parseStepParams(s.rawStepJson).locatorSummary }}</div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -339,33 +387,119 @@ function formatErrorDetail(errorMsg) {
   return result.slice(0, 10).join('\n')
 }
 
-function formatStepParams(rawJson) {
+function parseStepParams(rawJson) {
   try {
-    const params = JSON.parse(rawJson)
-    const stepType = params.type || ''
-    const action = params.action || ''
-    const description = params.description || ''
-
-    let result = `类型：${getStepTypeLabel(stepType)}\n动作：${getActionLabel(action)}`
-    if (description) {
-      result += `\n描述：${description}`
+    const payload = JSON.parse(rawJson)
+    const parameters = payload.parameters || {}
+    return {
+      typeLabel: getStepTypeLabel(payload.type || ''),
+      actionLabel: getActionLabel(payload.action || ''),
+      description: payload.description || '',
+      parameterEntries: buildParameterEntries(payload.action || '', parameters),
+      locatorSummary: parameters?.locatorValue
+        ? `${parameters.locatorType || '-'}: ${parameters.locatorValue}`
+        : '',
     }
-
-    const paramPairs = Object.entries(params.parameters || {})
-      .filter(([k]) => !['locatorValue', 'locatorType'].includes(k))
-      .map(([k, v]) => `${k}: ${v}`)
-    if (paramPairs.length) {
-      result += `\n参数：\n  ${paramPairs.join('\n  ')}`
-    }
-
-    if (params.parameters?.locatorValue) {
-      result += `\n\n定位表达式：\n  ${params.parameters.locatorType}: ${params.parameters.locatorValue}`
-    }
-
-    return result
   } catch {
-    return rawJson || ''
+    return {
+      typeLabel: '未知步骤',
+      actionLabel: '原始数据',
+      description: '',
+      parameterEntries: [
+        { key: 'raw', label: '原始内容', value: rawJson || '-', kind: 'text', block: true },
+      ],
+      locatorSummary: '',
+    }
   }
+}
+
+function buildParameterEntries(action, parameters) {
+  const hiddenKeys = new Set(['locatorValue', 'locatorType'])
+  if (action === 'aiImageClick') {
+    hiddenKeys.add('optimizeXpath')
+  }
+
+  return Object.entries(parameters || {})
+    .filter(([key, value]) => !hiddenKeys.has(key) && value !== undefined && value !== null && value !== '')
+    .map(([key, value]) => normalizeParameterEntry(key, value))
+}
+
+function normalizeParameterEntry(key, value) {
+  const labelMap = {
+    mode: '识别模式',
+    instruction: '文字提示',
+    assetId: '资源 ID',
+    assetName: '图片名称',
+    imagePath: '图片路径',
+    previewUrl: '预览地址',
+    sourceType: '图片来源',
+    threshold: '匹配阈值',
+    text: '输入内容',
+    expected: '预期结果',
+    expectedText: '预期文本',
+    timeout: '超时时间',
+    seconds: '等待秒数',
+    optionType: '选项类型',
+    optionValue: '选项值',
+    optimizeXpath: '优化 XPath',
+    box: '框选区域',
+  }
+
+  if (key === 'box' && value && typeof value === 'object') {
+    return {
+      key,
+      label: labelMap[key] || key,
+      value: {
+        xRatio: formatRatio(value.xRatio),
+        yRatio: formatRatio(value.yRatio),
+        widthRatio: formatRatio(value.widthRatio),
+        heightRatio: formatRatio(value.heightRatio),
+      },
+      kind: 'box',
+      block: true,
+    }
+  }
+
+  if (Array.isArray(value)) {
+    return {
+      key,
+      label: labelMap[key] || key,
+      value: value.map(item => formatParameterValue(item)),
+      kind: 'list',
+      block: false,
+    }
+  }
+
+  const formattedValue = formatParameterValue(value)
+  return {
+    key,
+    label: labelMap[key] || key,
+    value: formattedValue,
+    kind: 'text',
+    block: formattedValue.length > 48,
+  }
+}
+
+function formatParameterValue(value) {
+  if (value == null) return '-'
+  if (typeof value === 'boolean') return value ? '是' : '否'
+  if (typeof value === 'number') return Number.isInteger(value) ? String(value) : value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')
+  if (typeof value === 'object') return JSON.stringify(value)
+
+  const text = String(value)
+  const modeMap = {
+    crop: '框选区域点击',
+    template: '目标小图点击',
+    paste: '剪贴板粘贴',
+    upload: '选择文件',
+    drag: '拖拽上传',
+  }
+  return modeMap[text] || text
+}
+
+function formatRatio(value) {
+  if (value == null || Number.isNaN(Number(value))) return '-'
+  return `${(Number(value) * 100).toFixed(1)}%`
 }
 </script>
 
@@ -649,6 +783,13 @@ function formatStepParams(rawJson) {
   font-family: ui-monospace, Consolas, 'Courier New', monospace;
 }
 
+.step-param-card {
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1px solid rgba(226, 232, 240, 0.96);
+  font-family: inherit;
+  color: #334155;
+}
+
 .log-content {
   background: #f8fafc;
   color: #334155;
@@ -659,6 +800,111 @@ function formatStepParams(rawJson) {
   background: #1e1e1e;
   color: #e5e5e5;
   border: 1px solid #333;
+}
+
+.param-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.param-summary-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.param-type-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.1);
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.param-action-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.param-description {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.param-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.param-item {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(248, 250, 252, 0.95);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+}
+
+.param-item.is-block {
+  grid-column: 1 / -1;
+}
+
+.param-key {
+  font-size: 11px;
+  color: #64748b;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.param-value {
+  font-size: 12px;
+  color: #0f172a;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.param-multiline {
+  white-space: pre-wrap;
+}
+
+.param-inline-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  margin-right: 6px;
+  margin-bottom: 6px;
+  border-radius: 999px;
+  background: rgba(14, 165, 233, 0.1);
+  color: #0369a1;
+  font-size: 11px;
+}
+
+.param-box-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+  font-size: 12px;
+}
+
+.param-locator {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px dashed rgba(148, 163, 184, 0.55);
+}
+
+.param-locator-value {
+  font-family: ui-monospace, Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  color: #0f172a;
+  line-height: 1.6;
+  word-break: break-all;
 }
 
 .step-shot {

@@ -48,6 +48,22 @@
               />
             </el-select>
           </div>
+          <el-button
+            plain
+            class="module-create-trigger"
+            @click="openCreateModuleDialog"
+            :disabled="!orgStore.currentOrganizationId"
+          >
+            新建分类
+          </el-button>
+          <el-button
+            plain
+            class="module-create-trigger"
+            @click="openManageModuleDialog"
+            :disabled="!orgStore.currentOrganizationId"
+          >
+            管理分类
+          </el-button>
         </div>
         <div class="space-header-right">
           <div class="filter-summary">
@@ -246,6 +262,78 @@
         </span>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="createModuleDialogVisible"
+      title="新建用例分类"
+      width="420px"
+      class="create-dialog"
+    >
+      <el-form label-width="90px" size="small" class="create-form create-form--module">
+        <el-form-item label="所属组织">
+          <el-input
+            :value="currentOrganizationLabel"
+            class="form-control"
+            disabled
+          />
+        </el-form-item>
+        <el-form-item label="分类名称" required>
+          <el-input
+            v-model="newModuleName"
+            class="form-control"
+            maxlength="50"
+            placeholder="例如：登录流程、订单中心、核心回归"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="createModuleDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="confirmCreateModule">
+            确认创建
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="manageModuleDialogVisible"
+      title="分类管理"
+      width="560px"
+      class="create-dialog"
+    >
+      <div class="module-manage-panel">
+        <div
+          v-for="module in uiStore.modules"
+          :key="module.id || module.key"
+          class="module-manage-item"
+        >
+          <div class="module-manage-item__meta">
+            <span class="module-manage-item__name">{{ module.name }}</span>
+            <span class="module-manage-item__key">{{ module.key }}</span>
+            <span class="module-manage-item__count">关联用例 {{ module.caseCount || 0 }}</span>
+          </div>
+          <div class="module-manage-item__actions">
+            <el-button plain size="small" @click="renameModule(module)">
+              重命名
+            </el-button>
+            <el-button
+              plain
+              size="small"
+              type="danger"
+              :disabled="!module.deletable"
+              @click="removeModule(module)"
+            >
+              删除
+            </el-button>
+          </div>
+        </div>
+        <el-empty
+          v-if="!uiStore.modules.length"
+          description="当前组织下暂无用例分类"
+        />
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -265,19 +353,25 @@ const orgStore = useOrgStore()
 const tableRef = ref(null)
 const selectedRows = ref([])
 const createDialogVisible = ref(false)
+const createModuleDialogVisible = ref(false)
+const manageModuleDialogVisible = ref(false)
 const newCaseModuleKey = ref('')
 const newCaseCreator = ref('')
 const newCaseTitle = ref('')
+const newModuleName = ref('')
 
 const currentPage = ref(1)
 const pageSize = ref(10)
 
 // 在组件挂载时获取用例数据和组织数据
 onMounted(async () => {
-  // 先获取用户有权限的组织列表
-  await orgStore.fetchOrganizations()
-  // 然后获取用例数据
-  await uiStore.fetchCases()
+  try {
+    await orgStore.fetchOrganizations()
+    await uiStore.fetchCases()
+  } catch (err) {
+    console.error('初始化 UI 用例空间失败:', err)
+    ElMessage.error(err.message || '加载 UI 用例页面失败')
+  }
 })
 
 watch(
@@ -375,6 +469,11 @@ function ensureTeamAndModule() {
 }
 
 function onCreateCase() {
+  if (!uiStore.modules.length) {
+    ElMessage.warning('请先创建用例分类')
+    openCreateModuleDialog()
+    return
+  }
   const { moduleKey } = ensureTeamAndModule()
   newCaseModuleKey.value = selectedModuleKey.value === 'all' ? '' : selectedModuleKey.value
   if (!newCaseModuleKey.value) {
@@ -383,6 +482,101 @@ function onCreateCase() {
   newCaseCreator.value = userStore.username || '未命名用户'
   newCaseTitle.value = ''
   createDialogVisible.value = true
+}
+
+function openCreateModuleDialog() {
+  if (!orgStore.currentOrganizationId) {
+    ElMessage.warning('请先选择所属组织')
+    return
+  }
+  newModuleName.value = ''
+  createModuleDialogVisible.value = true
+}
+
+function openManageModuleDialog() {
+  if (!orgStore.currentOrganizationId) {
+    ElMessage.warning('请先选择所属组织')
+    return
+  }
+  manageModuleDialogVisible.value = true
+}
+
+async function confirmCreateModule() {
+  const moduleName = String(newModuleName.value || '').trim()
+  if (!moduleName) {
+    ElMessage.error('请输入分类名称')
+    return
+  }
+  if (uiStore.modules.some(item => item.key === moduleName)) {
+    ElMessage.warning('该分类已存在')
+    return
+  }
+
+  try {
+    await uiStore.addModule(moduleName, orgStore.currentOrganizationId)
+    selectedModuleKey.value = moduleName
+    newCaseModuleKey.value = moduleName
+    createModuleDialogVisible.value = false
+    ElMessage.success('分类创建成功')
+  } catch (err) {
+    ElMessage.error(err.message || '创建分类失败')
+  }
+}
+
+async function renameModule(module) {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入新的分类名称', '重命名分类', {
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
+      inputValue: module.name,
+      inputPlaceholder: '请输入分类名称',
+      inputValidator: (value) => {
+        if (!String(value || '').trim()) {
+          return '分类名称不能为空'
+        }
+        return true
+      },
+    })
+
+    const nextName = String(value || '').trim()
+    if (!nextName || nextName === module.name) {
+      return
+    }
+
+    await uiStore.renameModule(module.id, nextName, orgStore.currentOrganizationId)
+    ElMessage.success('分类重命名成功')
+  } catch (err) {
+    if (err === 'cancel') return
+    ElMessage.error(err.message || '分类重命名失败')
+  }
+}
+
+async function removeModule(module) {
+  if (!module.deletable) {
+    ElMessage.warning('该分类下仍有关联用例，无法删除')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确定删除分类“${module.name}”吗？`,
+      '删除分类确认',
+      {
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
+
+    await uiStore.removeModule(module.id, orgStore.currentOrganizationId)
+    if (selectedModuleKey.value === module.key) {
+      selectedModuleKey.value = 'all'
+    }
+    ElMessage.success('分类删除成功')
+  } catch (err) {
+    if (err === 'cancel') return
+    ElMessage.error(err.message || '删除分类失败')
+  }
 }
 
 async function confirmCreateCase() {
@@ -620,6 +814,7 @@ function focusCaseRow(testCase) {
 
 .space-header-left {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 14px 18px;
 }
@@ -647,6 +842,12 @@ function focusCaseRow(testCase) {
   color: var(--text-secondary);
   font-weight: 500;
   white-space: nowrap;
+}
+
+.module-create-trigger {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 14px;
 }
 
 .filter-summary {
@@ -866,6 +1067,26 @@ function focusCaseRow(testCase) {
   color: var(--text-primary);
 }
 
+:deep(.create-form .el-form-item) {
+  margin-bottom: 20px;
+}
+
+:deep(.create-form .el-form-item:last-child) {
+  margin-bottom: 0;
+}
+
+.create-form--module {
+  padding-top: 4px;
+}
+
+.form-control {
+  width: 100%;
+}
+
+:deep(.create-form--module .el-form-item__content) {
+  max-width: 260px;
+}
+
 :deep(.create-form .el-form-item.is-required .el-form-item__label::before) {
   color: #f56c6c;
   margin-right: 4px;
@@ -880,6 +1101,50 @@ function focusCaseRow(testCase) {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.module-manage-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.module-manage-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #f8fbff;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.module-manage-item__meta {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.module-manage-item__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.module-manage-item__key,
+.module-manage-item__count {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.module-manage-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 :deep(.el-pagination) {

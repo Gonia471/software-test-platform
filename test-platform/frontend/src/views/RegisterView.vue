@@ -14,7 +14,7 @@
           </div>
           <div class="auth-feature">
             <strong>模块统一风格</strong>
-            <span>进入系统后，页面视觉会保持一致，便于答辩展示整体性。</span>
+            <span>进入系统后，各模块保持统一视觉与交互风格，便于团队长期使用。</span>
           </div>
           <div class="auth-feature">
             <strong>后续可继续邀请成员</strong>
