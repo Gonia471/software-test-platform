@@ -7,5 +7,6 @@ import lombok.Setter;
 @Setter
 public class CreateInvitationRequest {
     private String invitedPhone;
+    private Long organizationId;
     private Integer validDays = 7;
 }

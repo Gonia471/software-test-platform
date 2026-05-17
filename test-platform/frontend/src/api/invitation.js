@@ -1,13 +1,17 @@
 import request from './request'
 
-export function getOrgInvitations(orgId) {
-  return request.get(`/invitations/orgs/${orgId}`)
+export function getInvitations() {
+  return request.get('/invitations')
 }
 
-export function createInvitation(orgId, data) {
-  return request.post(`/invitations/orgs/${orgId}`, data)
+export function createInvitation(data) {
+  return request.post('/invitations', data)
 }
 
-export function useInvitation(code) {
-  return request.post(`/invitations/use/${code}`)
+export function acceptInvitation(invitationId) {
+  return request.post(`/invitations/${invitationId}/accept`)
+}
+
+export function checkInvitationByPhone(phone) {
+  return request.get('/invitations/check', { params: { phone } })
 }

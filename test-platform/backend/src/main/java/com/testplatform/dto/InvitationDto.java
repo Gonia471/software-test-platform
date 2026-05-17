@@ -13,12 +13,14 @@ import java.time.Instant;
 @AllArgsConstructor
 public class InvitationDto {
     private Long id;
+    private Long enterpriseSpaceId;
+    private String enterpriseSpaceName;
     private Long organizationId;
     private String organizationName;
-    private String invitationCode;
     private String invitedPhone;
     private Boolean used;
     private String usedByUsername;
+    private String invitedByUsername;
     private Instant createdAt;
     private Instant expiredAt;
 }

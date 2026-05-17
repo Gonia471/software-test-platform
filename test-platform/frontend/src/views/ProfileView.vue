@@ -47,7 +47,13 @@
               <el-input v-model="editForm.username" placeholder="请输入用户名" />
             </el-form-item>
             <el-form-item label="手机号">
-              <el-input v-model="editForm.phone" placeholder="请输入手机号" maxlength="11" />
+              <el-input
+                v-model="editForm.phone"
+                placeholder="请输入手机号"
+                maxlength="11"
+                inputmode="numeric"
+                @input="editForm.phone = sanitizePhoneInput(editForm.phone)"
+              />
             </el-form-item>
             <el-form-item>
               <el-button type="primary" @click="saveEdit" :loading="saving">保存</el-button>
@@ -121,6 +127,7 @@ import { useUserStore } from '../stores/user'
 import { useOrgStore } from '../stores/org'
 import { getCurrentUser, updateCurrentUser } from '../api/user'
 import { getUserOrganizations, removeMember } from '../api/organization'
+import { isValidPhone, sanitizePhoneInput } from '../utils/phone'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -181,6 +188,11 @@ function cancelEdit() {
 async function saveEdit() {
   if (!editForm.value.username) {
     ElMessage.warning('请输入用户名')
+    return
+  }
+  editForm.value.phone = sanitizePhoneInput(editForm.value.phone)
+  if (editForm.value.phone && !isValidPhone(editForm.value.phone)) {
+    ElMessage.warning('请输入11位手机号')
     return
   }
   saving.value = true

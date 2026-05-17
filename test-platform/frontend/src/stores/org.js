@@ -5,6 +5,7 @@ import { getUserOrganizations, createOrganization } from '../api/organization'
 export const useOrgStore = defineStore('org', () => {
   const organizations = ref([])
   const currentOrganizationId = ref(localStorage.getItem('currentOrganizationId') || null)
+  const lastFetchError = ref('')
   const currentOrganization = computed(() =>
     organizations.value.find(o => o.id === Number(currentOrganizationId.value))
   )
@@ -13,6 +14,7 @@ export const useOrgStore = defineStore('org', () => {
     try {
       const res = await getUserOrganizations()
       organizations.value = res.data || []
+      lastFetchError.value = ''
 
       const hasCurrentOrganization = organizations.value.some(
         o => Number(o.id) === Number(currentOrganizationId.value)
@@ -28,6 +30,7 @@ export const useOrgStore = defineStore('org', () => {
       }
     } catch (err) {
       console.error('获取组织列表失败:', err)
+      lastFetchError.value = err.response?.data?.message || err.message || '获取组织列表失败'
       organizations.value = []
       currentOrganizationId.value = null
       localStorage.removeItem('currentOrganizationId')
@@ -51,6 +54,7 @@ export const useOrgStore = defineStore('org', () => {
     organizations,
     currentOrganizationId,
     currentOrganization,
+    lastFetchError,
     fetchOrganizations,
     setCurrentOrganization,
     createOrg

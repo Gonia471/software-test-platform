@@ -39,7 +39,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             if ("dev-token".equals(token)) {
                 List<User> users = userRepository.findAll(PageRequest.of(0, 1)).getContent();
                 if (!users.isEmpty()) {
-                    userPrincipal = new UserPrincipal(users.get(0));
+                    userPrincipal = new UserPrincipal(users.get(0), true);
                 } else {
                     System.err.println("[JwtAuthFilter] dev-token used but no users found in database!");
                 }

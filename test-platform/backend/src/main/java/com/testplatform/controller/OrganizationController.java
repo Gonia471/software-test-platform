@@ -89,4 +89,19 @@ public class OrganizationController {
         organizationService.removeMember(id, memberId, user);
         return ResponseEntity.noContent().build();
     }
+
+    @GetMapping("/{id}/available-members")
+    public ResponseEntity<List<EnterpriseSpaceMemberDto>> getAvailableMembers(@PathVariable Long id) {
+        User user = SecurityUtils.getCurrentUser();
+        return ResponseEntity.ok(organizationService.getAvailableEnterpriseMembers(id, user));
+    }
+
+    @PostMapping("/{id}/members")
+    public ResponseEntity<OrganizationMemberDto> addMember(
+            @PathVariable Long id,
+            @Valid @RequestBody AddOrganizationMemberRequest request) {
+        User user = SecurityUtils.getCurrentUser();
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(organizationService.addMember(id, request, user));
+    }
 }

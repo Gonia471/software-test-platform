@@ -17,6 +17,10 @@
           <el-icon><Odometer /></el-icon>
           <span>仪表盘</span>
         </el-menu-item>
+        <el-menu-item index="/enterprise-space">
+          <el-icon><OfficeBuilding /></el-icon>
+          <span>企业空间</span>
+        </el-menu-item>
         <el-menu-item index="/organizations">
           <el-icon><OfficeBuilding /></el-icon>
           <span>组织管理</span>
@@ -140,8 +144,8 @@ const isCollapse = ref(false)
 
 onMounted(async () => {
   const organizations = await orgStore.fetchOrganizations()
-  if (!organizations.length) {
-    ElMessage.warning('当前无法获取组织列表，请确认登录状态或组织权限')
+  if (orgStore.lastFetchError) {
+    ElMessage.warning(orgStore.lastFetchError)
   }
 })
 
@@ -151,6 +155,7 @@ const activeMenu = computed(() => {
   if (path.startsWith('/ui-test')) return '/ui-test'
   if (path.startsWith('/projects')) return '/projects'
   if (path.startsWith('/reports')) return '/reports'
+  if (path.startsWith('/enterprise-space')) return '/enterprise-space'
   if (path.startsWith('/settings')) return '/settings'
   if (path.startsWith('/profile')) return '/profile'
   return '/dashboard'

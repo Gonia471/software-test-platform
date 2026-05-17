@@ -26,28 +26,26 @@ public class InvitationController {
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("/orgs/{orgId}")
+    @PostMapping
     public ResponseEntity<InvitationDto> createInvitation(
-            @PathVariable Long orgId,
             @RequestBody @Valid CreateInvitationRequest request,
             @AuthenticationPrincipal UserPrincipal user) {
-        InvitationDto invitation = invitationService.createInvitation(orgId, request, user.getUser());
+        InvitationDto invitation = invitationService.createInvitation(request, user.getUser());
         return ResponseEntity.ok(invitation);
     }
 
-    @GetMapping("/orgs/{orgId}")
-    public ResponseEntity<List<InvitationDto>> getOrgInvitations(
-            @PathVariable Long orgId,
+    @GetMapping
+    public ResponseEntity<List<InvitationDto>> getInvitations(
             @AuthenticationPrincipal UserPrincipal user) {
-        List<InvitationDto> invitations = invitationService.getOrganizationInvitations(orgId, user.getUser());
+        List<InvitationDto> invitations = invitationService.getCurrentSpaceInvitations(user.getUser());
         return ResponseEntity.ok(invitations);
     }
 
-    @PostMapping("/use/{code}")
+    @PostMapping("/{invitationId}/accept")
     public ResponseEntity<Void> useInvitation(
-            @PathVariable String code,
+            @PathVariable Long invitationId,
             @AuthenticationPrincipal UserPrincipal user) {
-        invitationService.useInvitation(code, user.getUser());
+        invitationService.acceptInvitation(invitationId, user.getUser());
         return ResponseEntity.ok().build();
     }
 }

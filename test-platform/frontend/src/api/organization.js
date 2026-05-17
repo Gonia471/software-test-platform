@@ -35,3 +35,11 @@ export function updateMemberRole(orgId, memberId, data) {
 export function removeMember(orgId, memberId) {
   return request.delete(`/organizations/${orgId}/members/${memberId}`)
 }
+
+export function getAvailableMembers(orgId) {
+  return request.get(`/organizations/${orgId}/available-members`)
+}
+
+export function addMember(orgId, data) {
+  return request.post(`/organizations/${orgId}/members`, data)
+}

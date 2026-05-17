@@ -5,7 +5,7 @@
         <el-page-header content="组织管理" class="hero-header" @back="goBack" />
         <h2 class="hero-title">统一管理你的组织空间与成员协作</h2>
         <p class="hero-desc">
-          在这里创建组织、维护组织信息、查看成员和邀请记录，页面样式已统一为清爽的卡片式管理后台风格。
+          在这里创建组织、维护部门信息，并将当前企业空间中的成员分配到不同组织。
         </p>
       </div>
       <div class="org-hero__side">
@@ -215,56 +215,33 @@
       </div>
       <template #footer>
         <el-button @click="showMembersDialog = false">关闭</el-button>
-        <el-button type="primary" @click="openInviteDialog(currentOrg)">邀请成员</el-button>
+        <el-button type="primary" @click="openAddMemberDialog(currentOrg)">添加企业成员</el-button>
       </template>
     </el-dialog>
 
-    <!-- 邀请成员 -->
-    <el-dialog v-model="showInviteDialogFlag" title="邀请成员" width="580px">
-      <el-tabs v-model="inviteTab">
-        <el-tab-pane label="生成邀请码" name="create">
-          <el-form :model="inviteForm" label-width="100px">
-            <el-form-item label="被邀请手机">
-              <el-input v-model="inviteForm.invitedPhone" placeholder="选填" />
-            </el-form-item>
-            <el-form-item label="有效期">
-              <el-select v-model="inviteForm.validDays">
-                <el-option :value="7" label="7天" />
-                <el-option :value="14" label="14天" />
-                <el-option :value="30" label="30天" />
-              </el-select>
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" @click="handleCreateInvite" :loading="inviteLoading">生成邀请码</el-button>
-            </el-form-item>
-          </el-form>
-          <div v-if="generatedCode" class="invite-code-box">
-            <p>邀请码</p>
-            <h2>{{ generatedCode }}</h2>
-            <p class="tip">请发送给需要加入的成员</p>
-          </div>
-        </el-tab-pane>
-        <el-tab-pane label="邀请记录" name="history">
-          <el-table :data="invitations" size="small" stripe>
-            <el-table-column prop="invitationCode" label="邀请码" width="110" />
-            <el-table-column prop="invitedPhone" label="手机" width="100">
-              <template #default="{ row }">{{ row.invitedPhone || '-' }}</template>
-            </el-table-column>
-            <el-table-column prop="used" label="状态" width="70">
-              <template #default="{ row }">
-                <el-tag :type="row.used ? 'danger' : 'success'" size="small">{{ row.used ? '已用' : '未用' }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="usedByUsername" label="使用者" width="90">
-              <template #default="{ row }">{{ row.usedByUsername || '-' }}</template>
-            </el-table-column>
-            <el-table-column prop="expiredAt" label="过期时间">
-              <template #default="{ row }">{{ formatDate(row.expiredAt) }}</template>
-            </el-table-column>
-          </el-table>
-          <el-button type="primary" style="margin-top: 12px" size="small" @click="loadInvitations">刷新</el-button>
-        </el-tab-pane>
-      </el-tabs>
+    <el-dialog v-model="showAddMemberDialog" title="添加组织成员" width="520px">
+      <el-form label-width="90px">
+        <el-form-item label="企业成员">
+          <el-select v-model="addMemberForm.userId" placeholder="请选择当前企业空间成员" filterable>
+            <el-option
+              v-for="member in availableMembers"
+              :key="member.userId"
+              :label="`${member.username}${member.phone ? ` (${member.phone})` : ''}`"
+              :value="member.userId"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="组织角色">
+          <el-select v-model="addMemberForm.role">
+            <el-option label="普通成员" value="MEMBER" />
+            <el-option label="组织管理员" value="ORG_ADMIN" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showAddMemberDialog = false">取消</el-button>
+        <el-button type="primary" :loading="addMemberLoading" @click="handleAddMember">添加</el-button>
+      </template>
     </el-dialog>
   </div>
 </template>
@@ -286,8 +263,14 @@ import {
 } from '@element-plus/icons-vue'
 import { useOrgStore } from '../stores/org'
 import { useUserStore } from '../stores/user'
-import { updateOrganization, deleteOrganization, getOrgMembers, removeMember as removeMemberApi } from '../api/organization'
-import { getOrgInvitations, createInvitation } from '../api/invitation'
+import {
+  updateOrganization,
+  deleteOrganization,
+  getOrgMembers,
+  removeMember as removeMemberApi,
+  getAvailableMembers,
+  addMember as addMemberApi,
+} from '../api/organization'
 
 const router = useRouter()
 const orgStore = useOrgStore()
@@ -295,15 +278,13 @@ const userStore = useUserStore()
 
 const showCreateDialog = ref(false)
 const showEditDialog = ref(false)
-const showInviteDialogFlag = ref(false)
 const showMembersDialog = ref(false)
-const inviteTab = ref('create')
-const inviteLoading = ref(false)
+const showAddMemberDialog = ref(false)
+const addMemberLoading = ref(false)
 const membersLoading = ref(false)
-const generatedCode = ref('')
-const invitations = ref([])
 const currentOrgId = ref(null)
 const members = ref([])
+const availableMembers = ref([])
 const selectedOrgIds = ref([])
 const batchSelectMode = ref(false)
 
@@ -318,7 +299,7 @@ const allSelected = computed(() =>
 
 const form = reactive({ name: '', description: '', color: '#409EFF' })
 const editForm = reactive({ id: null, name: '', description: '', color: '' })
-const inviteForm = reactive({ invitedPhone: '', validDays: 7 })
+const addMemberForm = reactive({ userId: null, role: 'MEMBER' })
 
 onMounted(() => {
   orgStore.fetchOrganizations()
@@ -486,44 +467,39 @@ function handleBatchCommand(command) {
   }
 }
 
-async function openInviteDialog(org) {
+async function openAddMemberDialog(org) {
   if (!org) return
   currentOrgId.value = org.id
-  showInviteDialogFlag.value = true
-  inviteTab.value = 'create'
-  generatedCode.value = ''
-  inviteForm.invitedPhone = ''
-  inviteForm.validDays = 7
-  await loadInvitations()
-}
-
-async function loadInvitations() {
-  if (!currentOrgId.value) return
-  inviteLoading.value = true
+  showAddMemberDialog.value = true
+  addMemberForm.userId = null
+  addMemberForm.role = 'MEMBER'
   try {
-    const res = await getOrgInvitations(currentOrgId.value)
-    invitations.value = res.data || []
+    const res = await getAvailableMembers(currentOrgId.value)
+    availableMembers.value = res.data || []
   } catch (e) {
-    ElMessage.error('加载邀请记录失败')
-  } finally {
-    inviteLoading.value = false
+    ElMessage.error(e.response?.data?.message || '加载企业成员失败')
   }
 }
 
-async function handleCreateInvite() {
-  inviteLoading.value = true
+async function handleAddMember() {
+  if (!addMemberForm.userId) {
+    ElMessage.warning('请选择企业成员')
+    return
+  }
+  addMemberLoading.value = true
   try {
-    const res = await createInvitation(currentOrgId.value, {
-      invitedPhone: inviteForm.invitedPhone || null,
-      validDays: inviteForm.validDays,
+    await addMemberApi(currentOrgId.value, {
+      userId: addMemberForm.userId,
+      role: addMemberForm.role,
     })
-    generatedCode.value = res.data.invitationCode
-    ElMessage.success('邀请码生成成功')
-    await loadInvitations()
+    ElMessage.success('成员已添加到组织')
+    showAddMemberDialog.value = false
+    const res = await getOrgMembers(currentOrgId.value)
+    members.value = res.data || []
   } catch (e) {
-    ElMessage.error(e.response?.data?.message || '生成失败')
+    ElMessage.error(e.response?.data?.message || '添加成员失败')
   } finally {
-    inviteLoading.value = false
+    addMemberLoading.value = false
   }
 }
 

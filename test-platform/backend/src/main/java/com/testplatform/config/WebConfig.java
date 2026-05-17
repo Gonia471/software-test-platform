@@ -30,6 +30,10 @@ public class WebConfig {
         patterns.add("http://127.0.0.1:5173");
         patterns.add("http://localhost:5174");
         patterns.add("http://127.0.0.1:5174");
+        patterns.add("http://localhost:5175");
+        patterns.add("http://127.0.0.1:5175");
+        patterns.add("http://localhost:[*]");
+        patterns.add("http://127.0.0.1:[*]");
         patterns.add("https://*.onrender.com");
         if (StringUtils.hasText(extraPatterns)) {
             patterns.addAll(Arrays.stream(extraPatterns.split(","))

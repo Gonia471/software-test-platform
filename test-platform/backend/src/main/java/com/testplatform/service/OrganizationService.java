@@ -1,10 +1,13 @@
 package com.testplatform.service;
 
 import com.testplatform.dto.*;
+import com.testplatform.entity.EnterpriseSpace;
+import com.testplatform.entity.EnterpriseSpaceMember;
 import com.testplatform.entity.Organization;
 import com.testplatform.entity.OrganizationMember;
 import com.testplatform.entity.Project;
 import com.testplatform.entity.User;
+import com.testplatform.repository.EnterpriseSpaceMemberRepository;
 import com.testplatform.repository.OrganizationMemberRepository;
 import com.testplatform.repository.OrganizationRepository;
 import com.testplatform.repository.ProjectRepository;
@@ -28,6 +31,8 @@ public class OrganizationService {
     private final OrganizationMemberRepository memberRepository;
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
+    private final EnterpriseSpaceService enterpriseSpaceService;
+    private final EnterpriseSpaceMemberRepository enterpriseSpaceMemberRepository;
 
     @Transactional(readOnly = true)
     public List<OrganizationDto> getUserOrganizations(User user) {
@@ -46,10 +51,12 @@ public class OrganizationService {
     @Transactional
     public OrganizationDto createOrganization(CreateOrganizationRequest request, User user) {
         log.info("创建组织: name={}, user={}", request.getName(), user.getUsername());
+        EnterpriseSpace enterpriseSpace = enterpriseSpaceService.getCurrentEnterpriseSpace(user);
         Organization org = new Organization();
         org.setName(request.getName());
         org.setDescription(request.getDescription());
         org.setColor(request.getColor() != null ? request.getColor() : "#409EFF");
+        org.setEnterpriseSpace(enterpriseSpace);
         org.setOwner(user);
 
         org = organizationRepository.save(org);
@@ -57,7 +64,7 @@ public class OrganizationService {
         OrganizationMember member = new OrganizationMember();
         member.setOrganization(org);
         member.setUser(user);
-        member.setRole(OrganizationMember.Role.SPACE_CREATOR);
+        member.setRole(OrganizationMember.Role.ORG_ADMIN);
         member.setCanRead(true);
         member.setCanWrite(true);
         memberRepository.save(member);
@@ -79,14 +86,9 @@ public class OrganizationService {
     @Transactional
     public OrganizationDto updateOrganization(Long id, UpdateOrganizationRequest request, User user) {
         Organization org = findOrgOrThrow(id);
-
-        OrganizationMember member = organizationRepository.findMember(id, user)
-                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
-                        HttpStatus.FORBIDDEN, "您不是该组织成员"));
-
-        if (!member.isOrgAdmin()) {
+        if (!canManageOrganization(org, user)) {
             throw new org.springframework.web.server.ResponseStatusException(
-                    HttpStatus.FORBIDDEN, "只有空间管理员或组织管理员才能修改组织信息");
+                    HttpStatus.FORBIDDEN, "只有企业空间管理员或组织管理员才能修改组织信息");
         }
 
         if (request.getName() != null) {
@@ -105,14 +107,13 @@ public class OrganizationService {
     @Transactional
     public void deleteOrganization(Long id, User user) {
         Organization org = findOrgOrThrow(id);
-
-        OrganizationMember member = organizationRepository.findMember(id, user)
+        EnterpriseSpaceMember spaceMember = enterpriseSpaceMemberRepository
+                .findByEnterpriseSpaceIdAndUserId(org.getEnterpriseSpace().getId(), user.getId())
                 .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
-                        HttpStatus.FORBIDDEN, "您不是该组织成员"));
-
-        if (!member.isSpaceAdmin()) {
+                        HttpStatus.FORBIDDEN, "您不是当前企业空间成员"));
+        if (!spaceMember.isSpaceAdmin()) {
             throw new org.springframework.web.server.ResponseStatusException(
-                    HttpStatus.FORBIDDEN, "只有空间管理员才能删除组织");
+                    HttpStatus.FORBIDDEN, "只有企业空间管理员才能删除组织");
         }
 
         organizationRepository.delete(org);
@@ -214,14 +215,9 @@ public class OrganizationService {
         Organization org = organizationRepository.findByIdWithMembers(orgId)
                 .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
                         HttpStatus.NOT_FOUND, "组织不存在"));
-
-        OrganizationMember currentMember = organizationRepository.findMember(orgId, user)
-                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
-                        HttpStatus.FORBIDDEN, "您不是该组织成员"));
-
-        if (!currentMember.isOrgAdmin()) {
+        if (!canManageOrganization(org, user)) {
             throw new org.springframework.web.server.ResponseStatusException(
-                    HttpStatus.FORBIDDEN, "只有空间管理员或组织管理员才能修改成员角色");
+                    HttpStatus.FORBIDDEN, "只有企业空间管理员或组织管理员才能修改成员角色");
         }
 
         OrganizationMember targetMember = org.getMembers().stream()
@@ -230,9 +226,9 @@ public class OrganizationService {
                 .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
                         HttpStatus.NOT_FOUND, "成员不存在"));
 
-        if (targetMember.isSpaceCreator()) {
+        if (targetMember.getUser().getId().equals(org.getOwner().getId())) {
             throw new org.springframework.web.server.ResponseStatusException(
-                    HttpStatus.FORBIDDEN, "无法修改空间创建者的角色");
+                    HttpStatus.FORBIDDEN, "无法修改组织负责人的角色");
         }
 
         if (request.getRole() != null) {
@@ -254,14 +250,9 @@ public class OrganizationService {
         Organization org = organizationRepository.findByIdWithMembers(orgId)
                 .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
                         HttpStatus.NOT_FOUND, "组织不存在"));
-
-        OrganizationMember currentMember = organizationRepository.findMember(orgId, user)
-                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
-                        HttpStatus.FORBIDDEN, "您不是该组织成员"));
-
-        if (!currentMember.isOrgAdmin()) {
+        if (!canManageOrganization(org, user)) {
             throw new org.springframework.web.server.ResponseStatusException(
-                    HttpStatus.FORBIDDEN, "只有空间管理员或组织管理员才能移除成员");
+                    HttpStatus.FORBIDDEN, "只有企业空间管理员或组织管理员才能移除成员");
         }
 
         OrganizationMember targetMember = org.getMembers().stream()
@@ -270,9 +261,9 @@ public class OrganizationService {
                 .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
                         HttpStatus.NOT_FOUND, "成员不存在"));
 
-        if (targetMember.isSpaceCreator()) {
+        if (targetMember.getUser().getId().equals(org.getOwner().getId())) {
             throw new org.springframework.web.server.ResponseStatusException(
-                    HttpStatus.FORBIDDEN, "无法移除空间创建者");
+                    HttpStatus.FORBIDDEN, "无法移除组织负责人");
         }
 
         org.getMembers().remove(targetMember);
@@ -287,8 +278,100 @@ public class OrganizationService {
         return toMemberDto(member);
     }
 
+    @Transactional(readOnly = true)
+    public List<EnterpriseSpaceMemberDto> getAvailableEnterpriseMembers(Long orgId, User user) {
+        Organization org = organizationRepository.findByIdWithMembers(orgId)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "组织不存在"));
+        if (!canManageOrganization(org, user)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    HttpStatus.FORBIDDEN, "只有企业空间管理员或组织管理员才能添加成员");
+        }
+
+        List<Long> existingUserIds = org.getMembers().stream()
+                .map(m -> m.getUser().getId())
+                .toList();
+
+        return enterpriseSpaceMemberRepository.findAllByEnterpriseSpaceId(org.getEnterpriseSpace().getId()).stream()
+                .filter(member -> !existingUserIds.contains(member.getUser().getId()))
+                .map(this::toEnterpriseMemberDto)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public OrganizationMemberDto addMember(Long orgId, AddOrganizationMemberRequest request, User user) {
+        Organization org = organizationRepository.findByIdWithMembers(orgId)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "组织不存在"));
+        if (!canManageOrganization(org, user)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    HttpStatus.FORBIDDEN, "只有企业空间管理员或组织管理员才能添加成员");
+        }
+
+        User targetUser = userRepository.findById(request.getUserId())
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "用户不存在"));
+
+        if (!enterpriseSpaceMemberRepository.existsByEnterpriseSpaceIdAndUserId(
+                org.getEnterpriseSpace().getId(), targetUser.getId())) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "该用户尚未加入当前企业空间");
+        }
+
+        if (memberRepository.findByOrganizationIdAndUserId(orgId, targetUser.getId()).isPresent()) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "该成员已在当前组织中");
+        }
+
+        OrganizationMember member = new OrganizationMember();
+        member.setOrganization(org);
+        member.setUser(targetUser);
+        member.setRole(parseOrgRole(request.getRole()));
+        member.setCanRead(request.getCanRead() != null ? request.getCanRead() : true);
+        member.setCanWrite(request.getCanWrite() != null ? request.getCanWrite() : false);
+        return toMemberDto(memberRepository.save(member));
+    }
+
+    private boolean canManageOrganization(Organization org, User user) {
+        boolean isSpaceAdmin = enterpriseSpaceMemberRepository
+                .findByEnterpriseSpaceIdAndUserId(org.getEnterpriseSpace().getId(), user.getId())
+                .map(EnterpriseSpaceMember::isSpaceAdmin)
+                .orElse(false);
+        if (isSpaceAdmin) {
+            return true;
+        }
+        return organizationRepository.findMember(org.getId(), user)
+                .map(OrganizationMember::isOrgAdmin)
+                .orElse(false);
+    }
+
+    private OrganizationMember.Role parseOrgRole(String role) {
+        if (role == null || role.isBlank()) {
+            return OrganizationMember.Role.MEMBER;
+        }
+        OrganizationMember.Role parsed = OrganizationMember.Role.valueOf(role);
+        if (parsed == OrganizationMember.Role.SPACE_ADMIN || parsed == OrganizationMember.Role.SPACE_CREATOR) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "组织成员角色仅支持 ORG_ADMIN 或 MEMBER");
+        }
+        return parsed;
+    }
+
     private OrganizationMemberDto toMemberDto(OrganizationMember member) {
         return OrganizationMemberDto.builder()
+                .id(member.getId())
+                .userId(member.getUser().getId())
+                .username(member.getUser().getUsername())
+                .phone(member.getUser().getPhone())
+                .role(member.getRole())
+                .canRead(member.getCanRead())
+                .canWrite(member.getCanWrite())
+                .joinedAt(member.getJoinedAt())
+                .build();
+    }
+
+    private EnterpriseSpaceMemberDto toEnterpriseMemberDto(EnterpriseSpaceMember member) {
+        return EnterpriseSpaceMemberDto.builder()
                 .id(member.getId())
                 .userId(member.getUser().getId())
                 .username(member.getUser().getUsername())

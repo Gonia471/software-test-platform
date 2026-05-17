@@ -6,15 +6,18 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.Instant;
-import java.util.List;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class InvitationCheckResponse {
-    private Boolean hasInvitation;
-    private List<PendingInvitationDto> invitations;
+public class PendingInvitationDto {
+    private Long invitationId;
+    private Long enterpriseSpaceId;
+    private String enterpriseSpaceName;
+    private Long organizationId;
+    private String organizationName;
     private String invitedPhone;
+    private String inviterName;
     private Instant invitedAt;
 }

@@ -5,12 +5,12 @@
         <span class="auth-badge">Create Workspace</span>
         <h1 class="auth-intro__title">开通企业空间</h1>
         <p class="auth-intro__desc">
-          一次创建即可拥有组织、项目、API 测试、UI 自动化与测试报告等完整能力，适合团队协作与系统演示。
+          先创建企业空间，再按业务部门创建组织。企业空间用于公司级协作，组织用于承载不同业务团队。
         </p>
         <div class="auth-feature-list">
           <div class="auth-feature">
             <strong>企业空间即刻启用</strong>
-            <span>注册后自动完成初始组织创建，直接进入统一测试平台。</span>
+            <span>注册后仅创建企业空间，不再自动创建组织，结构更符合公司与部门关系。</span>
           </div>
           <div class="auth-feature">
             <strong>模块统一风格</strong>
@@ -18,7 +18,7 @@
           </div>
           <div class="auth-feature">
             <strong>后续可继续邀请成员</strong>
-            <span>创建后可在组织管理中生成邀请码并扩展成员协作。</span>
+            <span>创建后可在企业空间中按手机号邀请成员，再将已有企业成员加入具体组织。</span>
           </div>
         </div>
       </section>
@@ -38,6 +38,8 @@
             type="tel"
             placeholder="请输入手机号"
             maxlength="11"
+            inputmode="numeric"
+            @input="phone = sanitizePhoneInput(phone)"
           />
           <label class="field-label">企业空间名称</label>
           <input
@@ -69,6 +71,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { registerWithOrg } from '../api/auth'
+import { isValidPhone, sanitizePhoneInput } from '../utils/phone'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -80,15 +83,24 @@ const error = ref('')
 const loading = ref(false)
 
 async function handleRegister() {
+  phone.value = sanitizePhoneInput(phone.value)
   if (!phone.value || !orgName.value) {
     error.value = '请填写完整信息'
+    return
+  }
+  if (!isValidPhone(phone.value)) {
+    error.value = '请输入11位手机号'
     return
   }
   error.value = ''
   loading.value = true
   try {
     const { data } = await registerWithOrg(phone.value, orgName.value, description.value)
-    userStore.setAuth(data.token, data.username, data.phone, data.userId)
+    userStore.setAuth(data.token, data.username, data.phone, data.userId, false, {
+      hasEnterpriseSpace: data.hasEnterpriseSpace,
+      enterpriseSpaceId: data.enterpriseSpaceId,
+      enterpriseSpaceName: data.enterpriseSpaceName,
+    })
     router.push('/')
   } catch (e) {
     error.value = e.response?.data?.message || '开通失败'

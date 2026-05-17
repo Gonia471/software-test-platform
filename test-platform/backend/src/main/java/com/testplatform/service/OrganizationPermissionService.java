@@ -3,6 +3,7 @@ package com.testplatform.service;
 import com.testplatform.entity.Organization;
 import com.testplatform.entity.OrganizationMember;
 import com.testplatform.entity.User;
+import com.testplatform.repository.EnterpriseSpaceMemberRepository;
 import com.testplatform.repository.OrganizationMemberRepository;
 import com.testplatform.repository.OrganizationRepository;
 import com.testplatform.util.SecurityUtils;
@@ -18,6 +19,8 @@ public class OrganizationPermissionService {
 
     private final OrganizationRepository organizationRepository;
     private final OrganizationMemberRepository memberRepository;
+    private final EnterpriseSpaceService enterpriseSpaceService;
+    private final EnterpriseSpaceMemberRepository enterpriseSpaceMemberRepository;
 
     public List<Long> getAccessibleOrganizationIds(User user) {
         if (SecurityUtils.isDevMode()) {
@@ -26,25 +29,8 @@ public class OrganizationPermissionService {
                     .collect(Collectors.toList());
         }
 
-        List<OrganizationMember> memberships = memberRepository.findAll().stream()
-                .filter(m -> m.getUser().getId().equals(user.getId()))
-                .collect(Collectors.toList());
-
-        if (memberships.isEmpty()) {
-            return List.of();
-        }
-
-        boolean hasSpaceAdmin = memberships.stream()
-                .anyMatch(OrganizationMember::isSpaceAdmin);
-
-        if (hasSpaceAdmin) {
-            return organizationRepository.findAll().stream()
-                    .map(Organization::getId)
-                    .collect(Collectors.toList());
-        }
-
-        return memberships.stream()
-                .map(m -> m.getOrganization().getId())
+        return organizationRepository.findAllByMember(user).stream()
+                .map(Organization::getId)
                 .distinct()
                 .collect(Collectors.toList());
     }
@@ -63,6 +49,21 @@ public class OrganizationPermissionService {
             return true;
         }
 
+        try {
+            Long enterpriseSpaceId = organizationRepository.findById(orgId)
+                    .orElseThrow()
+                    .getEnterpriseSpace()
+                    .getId();
+            boolean isSpaceAdmin = enterpriseSpaceMemberRepository
+                    .findByEnterpriseSpaceIdAndUserId(enterpriseSpaceId, user.getId())
+                    .map(m -> m.isSpaceAdmin())
+                    .orElse(false);
+            if (isSpaceAdmin) {
+                return true;
+            }
+        } catch (Exception ignored) {
+        }
+
         return memberRepository.findByOrganizationIdAndUserId(orgId, user.getId())
                 .map(OrganizationMember::isOrgAdmin)
                 .orElse(false);
@@ -73,12 +74,13 @@ public class OrganizationPermissionService {
             return true;
         }
 
-        List<OrganizationMember> memberships = memberRepository.findAll().stream()
-                .filter(m -> m.getUser().getId().equals(user.getId()))
-                .collect(Collectors.toList());
-
-        return memberships.stream()
-                .anyMatch(OrganizationMember::isSpaceAdmin);
+        if (!enterpriseSpaceService.hasEnterpriseSpace(user)) {
+            return false;
+        }
+        return enterpriseSpaceMemberRepository.findByEnterpriseSpaceIdAndUserId(
+                        enterpriseSpaceService.getCurrentEnterpriseSpace(user).getId(), user.getId())
+                .map(m -> m.isSpaceAdmin())
+                .orElse(false);
     }
 
     public List<Long> getManageableOrganizationIds(User user) {
@@ -88,9 +90,10 @@ public class OrganizationPermissionService {
                     .collect(Collectors.toList());
         }
 
+        List<Long> accessibleOrgIds = getAccessibleOrganizationIds(user);
         return memberRepository.findAll().stream()
-                .filter(m -> m.getUser().getId().equals(user.getId()))
-                .filter(OrganizationMember::isOrgAdmin)
+                .filter(m -> accessibleOrgIds.contains(m.getOrganization().getId()))
+                .filter(m -> m.getUser().getId().equals(user.getId()) && m.isOrgAdmin())
                 .map(m -> m.getOrganization().getId())
                 .distinct()
                 .collect(Collectors.toList());

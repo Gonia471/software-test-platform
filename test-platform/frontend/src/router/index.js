@@ -24,6 +24,11 @@ const routes = [
         redirect: '/dashboard',
       },
       {
+        path: 'enterprise-space',
+        name: 'EnterpriseSpace',
+        component: () => import('../views/EnterpriseSpaceView.vue'),
+      },
+      {
         path: 'dashboard',
         name: 'Dashboard',
         component: () => import('../views/DashboardView.vue'),
@@ -85,13 +90,6 @@ router.beforeEach((to, from, next) => {
   const userStore = useUserStore()
   let token = localStorage.getItem('token')
 
-  // 开发/演示：未登录时注入占位 token，避免本地与演示环境白屏卡死
-  if (routeRequiresAuth(to) && !token) {
-    localStorage.setItem('token', 'dev-token')
-    localStorage.setItem('username', '开发模式用户')
-    token = 'dev-token'
-  }
-
   // 同步 Pinia 状态
   if (token && !userStore.token) {
     userStore.setAuth(
@@ -99,8 +97,18 @@ router.beforeEach((to, from, next) => {
       localStorage.getItem('username') || '开发模式用户',
       localStorage.getItem('phone') || '',
       localStorage.getItem('userId') || 1,
-      token === 'dev-token'
+      token === 'dev-token',
+      {
+        hasEnterpriseSpace: localStorage.getItem('hasEnterpriseSpace') === 'true',
+        enterpriseSpaceId: localStorage.getItem('enterpriseSpaceId') || null,
+        enterpriseSpaceName: localStorage.getItem('enterpriseSpaceName') || '',
+      }
     )
+  }
+
+  if (routeRequiresAuth(to) && !token) {
+    next('/login')
+    return
   }
 
   // 如果已登录但访问登录页，跳转到首页

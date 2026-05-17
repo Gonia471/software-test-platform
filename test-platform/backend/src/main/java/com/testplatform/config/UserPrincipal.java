@@ -10,9 +10,15 @@ import java.util.Collections;
 public class UserPrincipal implements UserDetails {
 
     private final User user;
+    private final boolean forceDevMode;
 
     public UserPrincipal(User user) {
+        this(user, false);
+    }
+
+    public UserPrincipal(User user, boolean forceDevMode) {
         this.user = user;
+        this.forceDevMode = forceDevMode;
     }
 
     public User getUser() {
@@ -24,12 +30,12 @@ public class UserPrincipal implements UserDetails {
     }
 
     public boolean isDevMode() {
-        return user.isDevMode();
+        return forceDevMode || user.isDevMode();
     }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        if (user.isDevMode()) {
+        if (isDevMode()) {
             return java.util.Arrays.asList(() -> "ROLE_USER", () -> "ROLE_DEV_ADMIN");
         }
         return Collections.singletonList(() -> "ROLE_USER");

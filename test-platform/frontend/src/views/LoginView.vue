@@ -39,11 +39,37 @@
             type="tel"
             placeholder="请输入手机号"
             maxlength="11"
+            inputmode="numeric"
+            @input="phone = sanitizePhoneInput(phone)"
           />
           <p v-if="error" class="error">{{ error }}</p>
           <button type="button" class="submit-btn" :disabled="loading" @click="handleLogin">
             {{ loading ? '登录中...' : '登录' }}
           </button>
+          <div v-if="pendingInvitations.length" class="invitation-panel">
+            <strong>检测到企业邀请</strong>
+            <div
+              v-for="invitation in pendingInvitations"
+              :key="invitation.invitationId"
+              class="invitation-item"
+            >
+              <div>
+                <div class="invitation-title">{{ invitation.enterpriseSpaceName }}</div>
+                <div class="invitation-desc">
+                  {{ invitation.organizationName ? `拟加入组织：${invitation.organizationName}` : '暂未指定组织' }}
+                </div>
+                <div class="invitation-desc">邀请人：{{ invitation.inviterName }}</div>
+              </div>
+              <button
+                type="button"
+                class="join-btn"
+                :disabled="joiningInvitationId === invitation.invitationId"
+                @click="handleAcceptInvitation(invitation)"
+              >
+                {{ joiningInvitationId === invitation.invitationId ? '加入中...' : '加入企业空间' }}
+              </button>
+            </div>
+          </div>
           <p class="tip">
             没有收到企业邀请？<router-link to="/register">点击这里，开通企业空间</router-link>
           </p>
@@ -58,6 +84,8 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { loginWithCode } from '../api/auth'
+import { acceptInvitation } from '../api/invitation'
+import { isValidPhone, sanitizePhoneInput } from '../utils/phone'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -65,17 +93,47 @@ const userStore = useUserStore()
 const phone = ref('')
 const error = ref('')
 const loading = ref(false)
+const pendingInvitations = ref([])
+const joiningInvitationId = ref(null)
 
 async function handleLogin() {
+  phone.value = sanitizePhoneInput(phone.value)
   if (!phone.value) {
     error.value = '请输入手机号'
+    return
+  }
+  if (!isValidPhone(phone.value)) {
+    error.value = '请输入11位手机号'
     return
   }
   error.value = ''
   loading.value = true
   try {
     const { data } = await loginWithCode(phone.value)
-    userStore.setAuth(data.token, data.username, data.phone, data.userId, data.isDevMode || false)
+    userStore.setAuth(
+      data.token,
+      data.username,
+      data.phone,
+      data.userId,
+      data.isDevMode || false,
+      {
+        hasEnterpriseSpace: data.hasEnterpriseSpace,
+        enterpriseSpaceId: data.enterpriseSpaceId,
+        enterpriseSpaceName: data.enterpriseSpaceName,
+      }
+    )
+    pendingInvitations.value = data.pendingInvitations || []
+
+    if (pendingInvitations.value.length > 0) {
+      error.value = ''
+      return
+    }
+
+    if (!data.hasEnterpriseSpace) {
+      error.value = '当前手机号尚未加入企业空间，请联系管理员邀请，或先开通企业空间'
+      return
+    }
+
     router.push('/')
   } catch (e) {
     error.value = e.response?.data?.message || '登录失败'
@@ -84,8 +142,37 @@ async function handleLogin() {
   }
 }
 
+async function handleAcceptInvitation(invitation) {
+  joiningInvitationId.value = invitation.invitationId
+  error.value = ''
+  try {
+    await acceptInvitation(invitation.invitationId)
+    userStore.setAuth(
+      userStore.token,
+      userStore.username,
+      userStore.phone,
+      userStore.userId,
+      userStore.isDevMode,
+      {
+        hasEnterpriseSpace: true,
+        enterpriseSpaceId: invitation.enterpriseSpaceId,
+        enterpriseSpaceName: invitation.enterpriseSpaceName,
+      }
+    )
+    router.push('/')
+  } catch (e) {
+    error.value = e.response?.data?.message || '加入失败'
+  } finally {
+    joiningInvitationId.value = null
+  }
+}
+
 function quickEnter() {
-  userStore.setAuth('dev-token', '开发模式用户', '', 1, true)
+  userStore.setAuth('dev-token', '开发模式用户', '', 1, true, {
+    hasEnterpriseSpace: false,
+    enterpriseSpaceId: null,
+    enterpriseSpaceName: '',
+  })
   router.push('/')
 }
 </script>
@@ -325,6 +412,49 @@ function quickEnter() {
   color: var(--primary-color);
   font-weight: 600;
   text-decoration: none;
+}
+
+.invitation-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  background: #f8fbff;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+}
+
+.invitation-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+}
+
+.invitation-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.invitation-desc {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.join-btn {
+  padding: 10px 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--primary-gradient);
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 @media (max-width: 920px) {

@@ -4,6 +4,7 @@ import com.testplatform.dto.UserDto;
 import com.testplatform.dto.UpdateUserRequest;
 import com.testplatform.entity.User;
 import com.testplatform.repository.UserRepository;
+import com.testplatform.util.PhoneUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,12 +36,13 @@ public class UserService {
             user.setUsername(request.getUsername());
         }
         if (request.getPhone() != null && !request.getPhone().isEmpty()) {
-            if (!request.getPhone().equals(user.getPhone())) {
-                if (userRepository.findByPhone(request.getPhone()).isPresent()) {
+            String normalizedPhone = PhoneUtils.normalizeAndValidate(request.getPhone());
+            if (!normalizedPhone.equals(user.getPhone())) {
+                if (userRepository.findByPhone(normalizedPhone).isPresent()) {
                     throw new IllegalArgumentException("该手机号已被使用");
                 }
             }
-            user.setPhone(request.getPhone());
+            user.setPhone(normalizedPhone);
         }
 
         user = userRepository.save(user);

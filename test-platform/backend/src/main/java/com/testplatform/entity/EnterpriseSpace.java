@@ -11,8 +11,8 @@ import java.util.List;
 @Getter
 @Setter
 @Entity
-@Table(name = "organizations")
-public class Organization {
+@Table(name = "enterprise_spaces")
+public class EnterpriseSpace {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -28,18 +28,14 @@ public class Organization {
     private String color = "#409EFF";
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "enterprise_space_id", nullable = false)
-    private EnterpriseSpace enterpriseSpace;
-
-    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id", nullable = false)
     private User owner;
 
-    @OneToMany(mappedBy = "organization", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<OrganizationMember> members = new ArrayList<>();
+    @OneToMany(mappedBy = "enterpriseSpace", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<EnterpriseSpaceMember> members = new ArrayList<>();
 
-    @OneToMany(mappedBy = "organization", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Project> projects = new ArrayList<>();
+    @OneToMany(mappedBy = "enterpriseSpace")
+    private List<Organization> organizations = new ArrayList<>();
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();

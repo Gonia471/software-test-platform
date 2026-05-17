@@ -377,7 +377,10 @@ const faqItems = [
 }
 
 .manual-hero__side {
-  min-width: 220px;
+  min-width: 240px;
+  display: grid;
+  gap: 14px;
+  align-content: start;
 }
 
 .hero-desc {
@@ -399,7 +402,8 @@ const faqItems = [
   flex-direction: column;
   justify-content: center;
   gap: 8px;
-  padding: 16px 18px;
+  min-height: 108px;
+  padding: 18px 20px;
   border-radius: 16px;
   background: var(--primary-soft-gradient);
   border: 1px solid rgba(59, 130, 246, 0.12);
@@ -610,7 +614,6 @@ const faqItems = [
 
   .manual-hero__side {
     min-width: 0;
-    display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
   }
