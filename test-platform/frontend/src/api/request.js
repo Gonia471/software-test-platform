@@ -12,6 +12,7 @@ const request = axios.create({
 
 request.interceptors.request.use(config => {
   const token = localStorage.getItem('token')
+  config.__authToken = token || ''
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
@@ -25,8 +26,12 @@ request.interceptors.response.use(
       err.message = responseMessage
     }
     if (err.response?.status === 401) {
+      const requestToken = err.config?.__authToken || ''
       const currentToken = localStorage.getItem('token')
-      if (currentToken) {
+      // Only clear the session if the failing request still belongs to
+      // the current login. This avoids old in-flight requests wiping out
+      // a freshly issued token right after the user logs in again.
+      if (currentToken && requestToken && currentToken === requestToken) {
         console.warn('Unauthorized! Clearing token and redirecting to login...')
         localStorage.removeItem('token')
         localStorage.removeItem('username')
