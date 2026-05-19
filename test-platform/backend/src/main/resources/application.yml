@@ -20,8 +20,15 @@ spring:
     password: ${SPRING_DATASOURCE_PASSWORD:${DB_PASSWORD:}}
     driver-class-name: org.h2.Driver
     hikari:
-      minimum-idle: 2
-      maximum-pool-size: 10
+      # 云端空闲恢复后，尽量不要长期保留失效连接
+      minimum-idle: ${DB_POOL_MIN_IDLE:0}
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:10}
+      idle-timeout: ${DB_IDLE_TIMEOUT_MS:300000}
+      max-lifetime: ${DB_MAX_LIFETIME_MS:540000}
+      keepalive-time: ${DB_KEEPALIVE_MS:240000}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:30000}
+      validation-timeout: ${DB_VALIDATION_TIMEOUT_MS:5000}
+      connection-test-query: ${DB_CONNECTION_TEST_QUERY:SELECT 1}
 
   jpa:
     hibernate:
