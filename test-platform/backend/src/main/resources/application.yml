@@ -18,7 +18,6 @@ spring:
     url: ${SPRING_DATASOURCE_URL:${DB_URL:jdbc:h2:file:./data/test_platform;DB_CLOSE_DELAY=-1;MODE=MySQL}}
     username: ${SPRING_DATASOURCE_USERNAME:${DB_USERNAME:sa}}
     password: ${SPRING_DATASOURCE_PASSWORD:${DB_PASSWORD:}}
-    driver-class-name: org.h2.Driver
     hikari:
       # 云端空闲恢复后，尽量不要长期保留失效连接
       minimum-idle: ${DB_POOL_MIN_IDLE:0}
@@ -37,7 +36,6 @@ spring:
     show-sql: false
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.H2Dialect
         format_sql: true
     open-in-view: false
 
