@@ -56,8 +56,10 @@ public class ApiPrescriptService {
         prescript.setHeadersJson(prescriptData.getHeadersJson());
         prescript.setBodyJson(prescriptData.getBodyJson());
         prescript.setExtractParamsJson(prescriptData.getExtractParamsJson());
+        prescript.setAssertionsJson(prescriptData.getAssertionsJson());
         prescript.setFunctionName(prescriptData.getFunctionName());
         prescript.setFunctionParamsJson(prescriptData.getFunctionParamsJson());
+        prescript.setSetVariablesJson(prescriptData.getSetVariablesJson());
         prescript.setStopOnFail(prescriptData.getStopOnFail());
         prescript.setSortOrder(prescriptData.getSortOrder());
 
@@ -79,20 +81,22 @@ public class ApiPrescriptService {
     }
 
     @Transactional
-    public void saveAll(Long collectionId, List<ApiPrescript> prescripts) {
+    public List<ApiPrescript> saveAll(Long collectionId, List<ApiPrescript> prescripts) {
         ApiCollection collection = collectionRepository.findById(collectionId)
                 .orElseThrow(() -> new IllegalArgumentException("用例不存在: " + collectionId));
 
         prescriptRepository.deleteByCollectionId(collectionId);
 
+        List<ApiPrescript> savedPrescripts = new java.util.ArrayList<>();
         for (int i = 0; i < prescripts.size(); i++) {
             ApiPrescript prescript = prescripts.get(i);
             prescript.setId(null);
             prescript.setCollection(collection);
             prescript.setSortOrder(i);
-            prescriptRepository.save(prescript);
+            savedPrescripts.add(prescriptRepository.save(prescript));
         }
 
         log.info("保存用例前置步骤: collectionId={}, count={}", collectionId, prescripts.size());
+        return savedPrescripts;
     }
 }

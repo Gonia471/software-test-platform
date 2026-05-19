@@ -73,6 +73,55 @@
             />
           </div>
 
+          <div class="http-section">
+            <div class="section-header">
+              <span>请求头</span>
+            </div>
+            <KeyValueEditor
+              v-model="prescript.headers"
+              :add-label="'添加请求头'"
+              :key-placeholder="'请求头名称'"
+              :value-placeholder="'值，支持 {{变量名}}'"
+              @change="emitChange"
+            />
+          </div>
+
+          <div class="http-section">
+            <div class="section-header">
+              <span>请求体</span>
+            </div>
+            <div class="body-editor">
+              <el-radio-group v-model="prescript.bodyType" size="small" @change="emitChange">
+                <el-radio-button value="none">无</el-radio-button>
+                <el-radio-button value="form-data">表单数据</el-radio-button>
+                <el-radio-button value="x-www-form-urlencoded">URL编码</el-radio-button>
+                <el-radio-button value="raw">原始数据</el-radio-button>
+              </el-radio-group>
+              <div v-if="prescript.bodyType === 'raw'" class="raw-body">
+                <el-select v-model="prescript.bodyRawType" size="small" class="raw-type" @change="emitChange">
+                  <el-option label="JSON" value="json" />
+                  <el-option label="XML" value="xml" />
+                  <el-option label="纯文本" value="text" />
+                </el-select>
+                <el-input
+                  v-model="prescript.bodyRaw"
+                  type="textarea"
+                  :rows="6"
+                  placeholder='{"key":"value"}'
+                  @input="emitChange"
+                />
+              </div>
+              <KeyValueEditor
+                v-else-if="prescript.bodyType !== 'none'"
+                v-model="prescript.bodyForm"
+                :add-label="'添加字段'"
+                :key-placeholder="'字段名'"
+                :value-placeholder="'字段值，支持 {{变量名}}'"
+                @change="emitChange"
+              />
+            </div>
+          </div>
+
           <div class="extract-section">
             <div class="extract-header">
               <span>参数提取（可提取多个）</span>
@@ -174,6 +223,12 @@
 import { ref, watch } from 'vue'
 import { Plus, Delete, Top, Bottom } from '@element-plus/icons-vue'
 import ScriptLibraryModal from './ScriptLibraryModal.vue'
+import KeyValueEditor from './KeyValueEditor.vue'
+
+const DEFAULT_HTTP_HEADERS = [
+  { key: 'Accept', value: 'application/json', enabled: true },
+  { key: 'Content-Type', value: 'application/json', enabled: true },
+]
 
 const props = defineProps({
   modelValue: {
@@ -182,15 +237,31 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['update:modelValue', 'openScriptLibrary'])
+const emit = defineEmits(['update:modelValue', 'change', 'openScriptLibrary'])
 
-const prescripts = ref([...props.modelValue])
+const prescripts = ref(normalizePrescripts(props.modelValue))
 const scriptLibraryVisible = ref(false)
 const currentScriptIndex = ref(-1)
 
 watch(prescripts, (val) => {
-  emit('update:modelValue', val)
+  const normalized = normalizePrescripts(val)
+  if (serializePrescripts(normalized) === serializePrescripts(props.modelValue)) {
+    return
+  }
+  emit('update:modelValue', normalized)
+  emit('change', normalized)
 }, { deep: true })
+
+watch(
+  () => props.modelValue,
+  (val) => {
+    const normalized = normalizePrescripts(val)
+    if (serializePrescripts(normalized) !== serializePrescripts(prescripts.value)) {
+      prescripts.value = normalized
+    }
+  },
+  { deep: true },
+)
 
 function getStepTypeLabel(type) {
   const labels = { HTTP: 'HTTP请求', FUNCTION: '函数调用', SET_VARIABLE: '设置变量' }
@@ -216,6 +287,11 @@ function addHttpPrescript() {
     stepType: 'HTTP',
     method: 'GET',
     url: '',
+    headers: createDefaultHttpHeaders(),
+    bodyType: 'none',
+    bodyRaw: '',
+    bodyRawType: 'json',
+    bodyForm: [],
     extractParams: [],
     assertions: [],
     stopOnFail: false
@@ -294,6 +370,83 @@ function openScriptLibrary() {
 
 function onSelectScript(script) {
   // 用户从脚本库选择了脚本
+}
+
+function emitChange() {
+  emit('update:modelValue', prescripts.value)
+  emit('change', prescripts.value)
+}
+
+function normalizePrescripts(items) {
+  if (!Array.isArray(items)) {
+    return []
+  }
+
+  return items.map((item) => normalizePrescript(item))
+}
+
+function normalizePrescript(item) {
+  const source = item && typeof item === 'object' ? item : {}
+  const stepType = source.stepType || 'HTTP'
+
+  if (stepType === 'HTTP') {
+    return {
+      ...source,
+      stepType: 'HTTP',
+      method: source.method || 'GET',
+      url: source.url || '',
+      headers: normalizeHttpHeaders(source.headers),
+      bodyType: source.bodyType || 'none',
+      bodyRaw: source.bodyRaw || '',
+      bodyRawType: source.bodyRawType || 'json',
+      bodyForm: Array.isArray(source.bodyForm) ? source.bodyForm : [],
+      extractParams: Array.isArray(source.extractParams) ? source.extractParams : [],
+      assertions: Array.isArray(source.assertions) ? source.assertions : [],
+      stopOnFail: Boolean(source.stopOnFail),
+    }
+  }
+
+  if (stepType === 'FUNCTION') {
+    return {
+      ...source,
+      stepType: 'FUNCTION',
+      functionName: source.functionName || '',
+      functionParams: source.functionParams || '',
+      outputVar: source.outputVar || '',
+      stopOnFail: Boolean(source.stopOnFail),
+    }
+  }
+
+  return {
+    ...source,
+    stepType: 'SET_VARIABLE',
+    varName: source.varName || '',
+    varValue: source.varValue || '',
+    stopOnFail: Boolean(source.stopOnFail),
+  }
+}
+
+function createDefaultHttpHeaders() {
+  return DEFAULT_HTTP_HEADERS.map((header) => ({ ...header }))
+}
+
+function normalizeHttpHeaders(headers) {
+  if (!Array.isArray(headers) || headers.length === 0) {
+    return createDefaultHttpHeaders()
+  }
+  return headers.map((header) => ({
+    key: header?.key || '',
+    value: header?.value || '',
+    enabled: header?.enabled !== false,
+  }))
+}
+
+function serializePrescripts(items) {
+  try {
+    return JSON.stringify(normalizePrescripts(items))
+  } catch {
+    return '[]'
+  }
 }
 </script>
 
@@ -502,15 +655,37 @@ function onSelectScript(script) {
   flex: 1;
 }
 
+.body-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.raw-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.raw-type {
+  width: 120px;
+}
+
+.raw-body :deep(textarea) {
+  font-family: 'Courier New', monospace;
+}
+
 .extract-section,
-.step-assertions {
+.step-assertions,
+.http-section {
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px dashed rgba(226, 232, 240, 0.95);
 }
 
 .extract-header,
-.step-assertions-header {
+.step-assertions-header,
+.section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;

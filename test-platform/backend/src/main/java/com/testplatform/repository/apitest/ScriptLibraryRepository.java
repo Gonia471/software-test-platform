@@ -11,10 +11,14 @@ import java.util.Optional;
 @Repository
 public interface ScriptLibraryRepository extends JpaRepository<ScriptLibrary, Long> {
 
+    @Query("SELECT s FROM ScriptLibrary s JOIN FETCH s.creator WHERE s.functionName = :functionName")
     Optional<ScriptLibrary> findByFunctionName(String functionName);
 
     boolean existsByFunctionName(String functionName);
 
     @Query("SELECT s FROM ScriptLibrary s JOIN FETCH s.creator ORDER BY s.createdAt DESC")
     List<ScriptLibrary> findAllByOrderByCreatedAtDesc();
+
+    @Query("SELECT s FROM ScriptLibrary s JOIN FETCH s.creator WHERE s.id = :id")
+    Optional<ScriptLibrary> findWithCreatorById(Long id);
 }

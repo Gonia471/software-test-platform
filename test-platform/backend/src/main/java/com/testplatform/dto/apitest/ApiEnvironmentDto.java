@@ -11,6 +11,8 @@ public class ApiEnvironmentDto {
 
     private String name;
 
+    private Long organizationId;
+
     private List<VariableDto> variables;
 
     private List<GlobalVariableDto> globalVariables;

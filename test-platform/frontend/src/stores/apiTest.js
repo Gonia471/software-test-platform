@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import {
   getCollections,
   saveCollection as saveCollectionApi,
@@ -12,11 +12,15 @@ import { useOrgStore } from './org'
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']
 const REQUEST_HISTORY_KEY = 'api-test-request-history-v1'
+const DEFAULT_CASE_HEADERS = [
+  { key: 'Accept', value: 'application/json', enabled: true },
+  { key: 'Content-Type', value: 'application/json', enabled: true },
+]
 
 export const useApiTestStore = defineStore('apiTest', () => {
   const orgStore = useOrgStore()
   const rawCollections = ref([])
-  const environments = ref([])
+  const rawEnvironments = ref([])
   const loading = ref(false)
   const error = ref(null)
 
@@ -37,6 +41,7 @@ export const useApiTestStore = defineStore('apiTest', () => {
       ...env,
       id: String(env.id ?? Date.now()),
       name: env.name || '未命名环境',
+      organizationId: env.organizationId != null ? Number(env.organizationId) : null,
       variables: Array.isArray(env.variables)
         ? env.variables.map((variable) => ({
             key: variable.key || '',
@@ -75,14 +80,13 @@ export const useApiTestStore = defineStore('apiTest', () => {
     try {
       const response = await getEnvironments()
       const environmentList = extractResponseData(response)
-      environments.value = (Array.isArray(environmentList) ? environmentList : []).map(normalizeEnvironment)
-      if (!currentEnvId.value && environments.value.length > 0) {
-        currentEnvId.value = environments.value[0].id
-      }
+      rawEnvironments.value = (Array.isArray(environmentList) ? environmentList : []).map(normalizeEnvironment)
+      syncCurrentEnvSelection()
     } catch (err) {
       error.value = err.message || '获取环境列表失败'
       console.error('获取API测试环境失败:', err)
-      environments.value = []
+      rawEnvironments.value = []
+      currentEnvId.value = ''
     } finally {
       loading.value = false
     }
@@ -108,6 +112,10 @@ export const useApiTestStore = defineStore('apiTest', () => {
 
   // 添加集合（简化版）
   async function addCollection(parentId, name = '新集合', type = 'folder') {
+    const defaultHeaders = type === 'case'
+      ? DEFAULT_CASE_HEADERS.map((header) => ({ ...header }))
+      : undefined
+
     const item = {
       parentId: parentId || null,
       name,
@@ -116,7 +124,7 @@ export const useApiTestStore = defineStore('apiTest', () => {
       method: type === 'case' ? 'GET' : undefined,
       url: type === 'case' ? '' : undefined,
       params: type === 'case' ? [] : undefined,
-      headers: type === 'case' ? [] : undefined,
+      headers: defaultHeaders,
       bodyType: type === 'case' ? 'none' : undefined,
       bodyRaw: type === 'case' ? '' : undefined,
       authType: type === 'case' ? 'none' : undefined,
@@ -131,10 +139,31 @@ export const useApiTestStore = defineStore('apiTest', () => {
   // 更新集合
   async function updateCollection(id, payload) {
     const node = findNodeById(rawCollections.value, id)
-    if (!node) return null
-    
-    const updatedData = { ...node, ...payload }
-    return await saveCollection(updatedData)
+    if (!node) {
+      throw new Error('未找到要更新的接口或文件夹')
+    }
+
+    const updatedData = {
+      id: node.id,
+      ...payload,
+    }
+    loading.value = true
+    error.value = null
+    try {
+      const response = await saveCollectionApi(updatedData)
+      const savedNode = extractResponseData(response)
+      syncNodeWithPayload(node, {
+        ...payload,
+        ...(savedNode && typeof savedNode === 'object' ? savedNode : {}),
+      })
+      return savedNode || { ...node }
+    } catch (err) {
+      error.value = err.message || '保存集合失败'
+      console.error('更新API测试集合失败:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
   }
 
   // 删除集合
@@ -158,7 +187,7 @@ export const useApiTestStore = defineStore('apiTest', () => {
   function findNodeById(nodes, id) {
     if (!nodes) return null
     for (const n of nodes) {
-      if (n.id === id) return n
+      if (String(n.id) === String(id)) return n
       const found = findNodeById(n.children, id)
       if (found) return found
     }
@@ -187,10 +216,27 @@ export const useApiTestStore = defineStore('apiTest', () => {
     return filterCollectionsByOrganization(rawCollections.value, currentOrgId)
   })
 
+  const environments = computed(() => {
+    const currentOrgId = orgStore.currentOrganizationId ? Number(orgStore.currentOrganizationId) : null
+    if (!currentOrgId) {
+      return []
+    }
+
+    return rawEnvironments.value.filter((env) =>
+      env.organizationId == null || Number(env.organizationId) === Number(currentOrgId),
+    )
+  })
+
   async function addEnvironment() {
+    const organizationId = Number(orgStore.currentOrganizationId || orgStore.organizations[0]?.id || 0)
+    if (!organizationId) {
+      throw new Error('请先选择所属组织')
+    }
+
     const payload = {
       name: `新环境 ${environments.value.length + 1}`,
       variables: [],
+      organizationId,
     }
     const response = await saveEnvironmentApi(payload)
     let env = normalizeEnvironment(extractResponseData(response))
@@ -198,14 +244,14 @@ export const useApiTestStore = defineStore('apiTest', () => {
       await fetchEnvironments()
       env = environments.value[environments.value.length - 1] || normalizeEnvironment(payload)
     } else {
-      environments.value.push(env)
+      rawEnvironments.value.push(env)
     }
-    currentEnvId.value = env.id
+    syncCurrentEnvSelection(env.id)
     return env
   }
 
   async function updateEnvironment(id, payload) {
-    const current = environments.value.find((env) => env.id === String(id))
+    const current = rawEnvironments.value.find((env) => env.id === String(id))
     if (!current) return null
     const response = await saveEnvironmentApi({
       ...current,
@@ -213,19 +259,18 @@ export const useApiTestStore = defineStore('apiTest', () => {
       id: Number(id),
     })
     const nextEnv = normalizeEnvironment(extractResponseData(response))
-    const index = environments.value.findIndex((env) => env.id === String(id))
+    const index = rawEnvironments.value.findIndex((env) => env.id === String(id))
     if (index !== -1) {
-      environments.value.splice(index, 1, nextEnv)
+      rawEnvironments.value.splice(index, 1, nextEnv)
     }
+    syncCurrentEnvSelection(currentEnvId.value)
     return nextEnv
   }
 
   async function removeEnvironment(id) {
     await deleteEnvironmentApi(id)
-    environments.value = environments.value.filter((env) => env.id !== String(id))
-    if (currentEnvId.value === String(id)) {
-      currentEnvId.value = environments.value[0]?.id || ''
-    }
+    rawEnvironments.value = rawEnvironments.value.filter((env) => env.id !== String(id))
+    syncCurrentEnvSelection()
   }
 
   const currentEnvironment = computed(() =>
@@ -255,9 +300,28 @@ export const useApiTestStore = defineStore('apiTest', () => {
     localStorage.setItem(REQUEST_HISTORY_KEY, JSON.stringify(nextHistory))
   }
 
+  function syncCurrentEnvSelection(preferredId = currentEnvId.value) {
+    const availableEnvironments = environments.value
+    if (availableEnvironments.length === 0) {
+      currentEnvId.value = ''
+      return
+    }
+
+    const hasPreferred = availableEnvironments.some((env) => env.id === String(preferredId))
+    currentEnvId.value = hasPreferred ? String(preferredId) : availableEnvironments[0].id
+  }
+
+  watch(
+    () => orgStore.currentOrganizationId,
+    () => {
+      syncCurrentEnvSelection()
+    },
+  )
+
   return {
     HTTP_METHODS,
     collections,
+    rawEnvironments,
     rawCollections,
     environments,
     loading,
@@ -312,6 +376,17 @@ function loadRequestHistory() {
     return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
+  }
+}
+
+function syncNodeWithPayload(node, payload) {
+  if (!node || !payload || typeof payload !== 'object') {
+    return
+  }
+
+  Object.assign(node, payload)
+  if (payload.nodeType) {
+    node.type = String(payload.nodeType).toLowerCase()
   }
 }
 

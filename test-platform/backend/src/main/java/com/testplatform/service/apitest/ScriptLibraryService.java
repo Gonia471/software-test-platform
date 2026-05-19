@@ -3,6 +3,7 @@ package com.testplatform.service.apitest;
 import com.testplatform.entity.apitest.ScriptLibrary;
 import com.testplatform.entity.User;
 import com.testplatform.repository.apitest.ScriptLibraryRepository;
+import com.testplatform.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -26,7 +27,7 @@ public class ScriptLibraryService {
 
     @Transactional(readOnly =true)
     public Optional<ScriptLibrary> getById(Long id) {
-        return scriptRepository.findById(id);
+        return scriptRepository.findWithCreatorById(id);
     }
 
     @Transactional(readOnly = true)
@@ -56,7 +57,7 @@ public class ScriptLibraryService {
 
         ScriptLibrary saved = scriptRepository.save(script);
         log.info("创建脚本: functionName={}, creator={}", functionName, creator.getUsername());
-        return saved;
+        return scriptRepository.findWithCreatorById(saved.getId()).orElse(saved);
     }
 
     @Transactional
@@ -64,7 +65,7 @@ public class ScriptLibraryService {
         ScriptLibrary script = scriptRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("脚本不存在: " + id));
 
-        if (!script.getCreator().getId().equals(user.getId())) {
+        if (!SecurityUtils.isDevMode() && !script.getCreator().getId().equals(user.getId())) {
             throw new IllegalArgumentException("无权限修改此脚本");
         }
 
@@ -88,7 +89,7 @@ public class ScriptLibraryService {
 
         ScriptLibrary saved = scriptRepository.save(script);
         log.info("更新脚本: id={}, functionName={}", id, newFunctionName);
-        return saved;
+        return scriptRepository.findWithCreatorById(saved.getId()).orElse(saved);
     }
 
     @Transactional
@@ -96,7 +97,7 @@ public class ScriptLibraryService {
         ScriptLibrary script = scriptRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("脚本不存在: " + id));
 
-        if (!script.getCreator().getId().equals(user.getId())) {
+        if (!SecurityUtils.isDevMode() && !script.getCreator().getId().equals(user.getId())) {
             throw new IllegalArgumentException("无权限删除此脚本");
         }
 

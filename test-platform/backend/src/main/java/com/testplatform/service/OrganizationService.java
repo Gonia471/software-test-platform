@@ -75,7 +75,7 @@ public class OrganizationService {
     public OrganizationDto getOrganization(Long id, User user) {
         Organization org = findOrgOrThrow(id);
 
-        if (!organizationRepository.isMember(id, user.getId())) {
+        if (!SecurityUtils.isDevMode() && !organizationRepository.isMember(id, user.getId())) {
             throw new org.springframework.web.server.ResponseStatusException(
                     HttpStatus.FORBIDDEN, "无权限访问该组织");
         }
@@ -107,6 +107,10 @@ public class OrganizationService {
     @Transactional
     public void deleteOrganization(Long id, User user) {
         Organization org = findOrgOrThrow(id);
+        if (SecurityUtils.isDevMode()) {
+            organizationRepository.delete(org);
+            return;
+        }
         EnterpriseSpaceMember spaceMember = enterpriseSpaceMemberRepository
                 .findByEnterpriseSpaceIdAndUserId(org.getEnterpriseSpace().getId(), user.getId())
                 .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
@@ -121,7 +125,7 @@ public class OrganizationService {
 
     @Transactional(readOnly = true)
     public List<ProjectDto> getOrganizationProjects(Long orgId, User user) {
-        if (!organizationRepository.isMember(orgId, user.getId())) {
+        if (!SecurityUtils.isDevMode() && !organizationRepository.isMember(orgId, user.getId())) {
             throw new org.springframework.web.server.ResponseStatusException(
                     HttpStatus.FORBIDDEN, "无权限访问该组织");
         }
@@ -197,7 +201,7 @@ public class OrganizationService {
 
     @Transactional(readOnly = true)
     public List<OrganizationMemberDto> getOrganizationMembers(Long orgId, User user) {
-        if (!organizationRepository.isMember(orgId, user.getId())) {
+        if (!SecurityUtils.isDevMode() && !organizationRepository.isMember(orgId, user.getId())) {
             throw new org.springframework.web.server.ResponseStatusException(
                     HttpStatus.FORBIDDEN, "无权限访问该组织");
         }
@@ -226,7 +230,7 @@ public class OrganizationService {
                 .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
                         HttpStatus.NOT_FOUND, "成员不存在"));
 
-        if (targetMember.getUser().getId().equals(org.getOwner().getId())) {
+        if (!SecurityUtils.isDevMode() && targetMember.getUser().getId().equals(org.getOwner().getId())) {
             throw new org.springframework.web.server.ResponseStatusException(
                     HttpStatus.FORBIDDEN, "无法修改组织负责人的角色");
         }
@@ -261,7 +265,7 @@ public class OrganizationService {
                 .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
                         HttpStatus.NOT_FOUND, "成员不存在"));
 
-        if (targetMember.getUser().getId().equals(org.getOwner().getId())) {
+        if (!SecurityUtils.isDevMode() && targetMember.getUser().getId().equals(org.getOwner().getId())) {
             throw new org.springframework.web.server.ResponseStatusException(
                     HttpStatus.FORBIDDEN, "无法移除组织负责人");
         }
@@ -271,6 +275,21 @@ public class OrganizationService {
     }
 
     public OrganizationMemberDto getMemberInfo(Long orgId, User user) {
+        if (SecurityUtils.isDevMode()) {
+            organizationRepository.findById(orgId)
+                    .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                            HttpStatus.NOT_FOUND, "组织不存在"));
+            return OrganizationMemberDto.builder()
+                    .id(null)
+                    .userId(user.getId())
+                    .username(user.getUsername())
+                    .phone(user.getPhone())
+                    .role(OrganizationMember.Role.ORG_ADMIN)
+                    .canRead(true)
+                    .canWrite(true)
+                    .joinedAt(null)
+                    .build();
+        }
         OrganizationMember member = organizationRepository.findMember(orgId, user)
                 .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
                         HttpStatus.FORBIDDEN, "您不是该组织成员"));
@@ -333,6 +352,9 @@ public class OrganizationService {
     }
 
     private boolean canManageOrganization(Organization org, User user) {
+        if (SecurityUtils.isDevMode()) {
+            return true;
+        }
         boolean isSpaceAdmin = enterpriseSpaceMemberRepository
                 .findByEnterpriseSpaceIdAndUserId(org.getEnterpriseSpace().getId(), user.getId())
                 .map(EnterpriseSpaceMember::isSpaceAdmin)

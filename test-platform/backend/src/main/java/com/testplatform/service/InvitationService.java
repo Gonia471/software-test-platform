@@ -15,6 +15,7 @@ import com.testplatform.repository.InvitationRepository;
 import com.testplatform.repository.OrganizationMemberRepository;
 import com.testplatform.repository.OrganizationRepository;
 import com.testplatform.util.PhoneUtils;
+import com.testplatform.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -50,7 +51,9 @@ public class InvitationService {
         if (request.getOrganizationId() != null) {
             targetOrganization = organizationRepository.findById(request.getOrganizationId())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "组织不存在"));
-            if (!targetOrganization.getEnterpriseSpace().getId().equals(enterpriseSpace.getId())) {
+            if (SecurityUtils.isDevMode()) {
+                enterpriseSpace = targetOrganization.getEnterpriseSpace();
+            } else if (!targetOrganization.getEnterpriseSpace().getId().equals(enterpriseSpace.getId())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "只能邀请加入当前企业空间下的组织");
             }
         }
@@ -72,6 +75,11 @@ public class InvitationService {
     @Transactional(readOnly = true)
     public List<InvitationDto> getCurrentSpaceInvitations(User user) {
         enterpriseSpaceService.ensureSpaceAdmin(user);
+        if (SecurityUtils.isDevMode()) {
+            return invitationRepository.findAll().stream()
+                    .map(this::toDto)
+                    .collect(Collectors.toList());
+        }
         EnterpriseSpace enterpriseSpace = enterpriseSpaceService.getCurrentEnterpriseSpace(user);
         return invitationRepository.findByEnterpriseSpace(enterpriseSpace).stream()
                 .map(this::toDto)

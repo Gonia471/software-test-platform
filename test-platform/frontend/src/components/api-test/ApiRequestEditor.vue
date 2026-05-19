@@ -206,7 +206,7 @@ const methodColors = {
 }
 
 function saveRequest() {
-  emit('update-request', { ...props.request })
+  emit('update-request', buildRequestPayload(props.request))
 }
 
 function queryUrlSuggestions(queryString, cb) {
@@ -316,11 +316,26 @@ function copyAsFetch() {
   })
 }
 
+function buildRequestPayload(source) {
+  return {
+    ...source,
+    params: Array.isArray(source?.params) ? source.params.map((item) => ({ ...item })) : [],
+    headers: Array.isArray(source?.headers) ? source.headers.map((item) => ({ ...item })) : [],
+    bodyForm: Array.isArray(source?.bodyForm) ? source.bodyForm.map((item) => ({ ...item })) : [],
+    authConfig: source?.authConfig ? { ...source.authConfig } : {},
+    prescripts: Array.isArray(source?.prescripts) ? JSON.parse(JSON.stringify(source.prescripts)) : [],
+    assertions: Array.isArray(source?.assertions) ? JSON.parse(JSON.stringify(source.assertions)) : [],
+  }
+}
+
 watch(
   () => props.request.prescripts,
   (val) => {
     if (!val) {
-      props.request.prescripts = []
+      emit('update-request', buildRequestPayload({
+        ...props.request,
+        prescripts: [],
+      }))
     }
   },
   { immediate: true }
@@ -330,7 +345,10 @@ watch(
   () => props.request.assertions,
   (val) => {
     if (!val) {
-      props.request.assertions = []
+      emit('update-request', buildRequestPayload({
+        ...props.request,
+        assertions: [],
+      }))
     }
   },
   { immediate: true }

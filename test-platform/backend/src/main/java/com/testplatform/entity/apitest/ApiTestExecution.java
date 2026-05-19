@@ -44,6 +44,9 @@ public class ApiTestExecution {
     @Column(name = "assertions_json", columnDefinition = "TEXT")
     private String assertionsJson;
 
+    @Column(name = "prescript_results_json", columnDefinition = "TEXT")
+    private String prescriptResultsJson;
+
     @Column(columnDefinition = "TEXT")
     private String errorMessage;
 

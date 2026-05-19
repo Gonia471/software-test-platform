@@ -33,6 +33,10 @@ public class ApiEnvironment {
     @JoinColumn(name = "project_id")
     private com.testplatform.entity.Project project;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "organization_id")
+    private com.testplatform.entity.Organization organization;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 

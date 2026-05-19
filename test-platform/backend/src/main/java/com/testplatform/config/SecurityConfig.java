@@ -45,6 +45,7 @@ public class SecurityConfig {
                 )
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/register-with-org", "/api/auth/login-with-code").permitAll()
+                .requestMatchers("/api/api-test/send").permitAll()
                 .requestMatchers("/api/invitations/check").permitAll()
                 .requestMatchers("/api/health").permitAll()
                 .requestMatchers("/api/ui-test/executions/*/screenshots/*").permitAll()

@@ -23,15 +23,14 @@ public class ApiEnvironmentController {
 
     @GetMapping
     public ResponseEntity<List<ApiEnvironmentDto>> getEnvironments(@AuthenticationPrincipal UserPrincipal user) {
-        Long userId = getUserId(user);
-        return ResponseEntity.ok(environmentService.getEnvironments(userId));
+        User userEntity = getUserEntity(user);
+        return ResponseEntity.ok(environmentService.getEnvironments(userEntity));
     }
 
     @PostMapping
     public ResponseEntity<ApiEnvironmentDto> create(
             @RequestBody ApiEnvironmentDto dto,
             @AuthenticationPrincipal UserPrincipal user) {
-        Long userId = getUserId(user);
         User userEntity = getUserEntity(user);
         return ResponseEntity.ok(environmentService.create(dto, userEntity));
     }
@@ -41,7 +40,6 @@ public class ApiEnvironmentController {
             @PathVariable Long id,
             @RequestBody ApiEnvironmentDto dto,
             @AuthenticationPrincipal UserPrincipal user) {
-        Long userId = getUserId(user);
         User userEntity = getUserEntity(user);
         return ResponseEntity.ok(environmentService.update(id, dto, userEntity));
     }
@@ -50,21 +48,9 @@ public class ApiEnvironmentController {
     public ResponseEntity<?> delete(
             @PathVariable Long id,
             @AuthenticationPrincipal UserPrincipal user) {
-        Long userId = getUserId(user);
         User userEntity = getUserEntity(user);
         environmentService.delete(id, userEntity);
         return ResponseEntity.ok(Map.of("message", "删除成功"));
-    }
-
-    private Long getUserId(UserPrincipal user) {
-        if (user != null) {
-            return user.getId();
-        }
-        User defaultUser = userRepository.findByUsername("test").orElse(null);
-        if (defaultUser != null) {
-            return defaultUser.getId();
-        }
-        throw new IllegalStateException("无法获取用户信息");
     }
 
     private User getUserEntity(UserPrincipal user) {

@@ -88,13 +88,18 @@ public class ApiCollectionService {
         ApiCollection collection = collectionRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("集合不存在: " + id));
 
-        if (!SecurityUtils.isDevMode()) {
-            if (collection.getOrganization() != null) {
-                if (!permissionService.canManageOrganization(collection.getOrganization().getId(), user)) {
+        if (SecurityUtils.isDevMode()) {
+            if (collection.getNodeType() == ApiCollection.NodeType.CASE
+                    && collection.getUser() != null
+                    && !collection.getUser().isDevMode()) {
+                throw new ResponseStatusException(FORBIDDEN, "开发者模式不能修改非开发者创建的测试用例");
+            }
+        } else {
+            if (collection.getUser() != null && !collection.getUser().getId().equals(user.getId())) {
+                if (collection.getOrganization() == null
+                        || !permissionService.canManageOrganization(collection.getOrganization().getId(), user)) {
                     throw new ResponseStatusException(FORBIDDEN, "您没有修改此 API 用例的权限");
                 }
-            } else if (!collection.getUser().getId().equals(user.getId())) {
-                throw new ResponseStatusException(FORBIDDEN, "您没有修改此 API 用例的权限");
             }
         }
 
@@ -104,18 +109,42 @@ public class ApiCollectionService {
             }
             collection.setName(dto.getName().trim());
         }
-        collection.setDescription(dto.getDescription());
-        collection.setMethod(dto.getMethod());
-        collection.setUrl(dto.getUrl());
-        collection.setParamsJson(toJson(dto.getParams()));
-        collection.setHeadersJson(toJson(dto.getHeaders()));
-        collection.setBodyType(dto.getBodyType());
-        collection.setBodyRaw(dto.getBodyRaw());
-        collection.setBodyRawType(dto.getBodyRawType());
-        collection.setBodyForm(toJson(dto.getBodyForm()));
-        collection.setAuthType(dto.getAuthType());
-        collection.setAuthConfig(toJson(dto.getAuthConfig()));
-        collection.setAssertions(toJson(dto.getAssertions()));
+        if (dto.getDescription() != null) {
+            collection.setDescription(dto.getDescription());
+        }
+        if (dto.getMethod() != null) {
+            collection.setMethod(dto.getMethod());
+        }
+        if (dto.getUrl() != null) {
+            collection.setUrl(dto.getUrl());
+        }
+        if (dto.getParams() != null) {
+            collection.setParamsJson(toJson(dto.getParams()));
+        }
+        if (dto.getHeaders() != null) {
+            collection.setHeadersJson(toJson(dto.getHeaders()));
+        }
+        if (dto.getBodyType() != null) {
+            collection.setBodyType(dto.getBodyType());
+        }
+        if (dto.getBodyRaw() != null) {
+            collection.setBodyRaw(dto.getBodyRaw());
+        }
+        if (dto.getBodyRawType() != null) {
+            collection.setBodyRawType(dto.getBodyRawType());
+        }
+        if (dto.getBodyForm() != null) {
+            collection.setBodyForm(toJson(dto.getBodyForm()));
+        }
+        if (dto.getAuthType() != null) {
+            collection.setAuthType(dto.getAuthType());
+        }
+        if (dto.getAuthConfig() != null) {
+            collection.setAuthConfig(toJson(dto.getAuthConfig()));
+        }
+        if (dto.getAssertions() != null) {
+            collection.setAssertions(toJson(dto.getAssertions()));
+        }
 
         ApiCollection.NodeType nodeType = dto.getNodeType();
         if (nodeType == null && dto.getType() != null) {
@@ -137,12 +166,11 @@ public class ApiCollectionService {
                 .orElseThrow(() -> new IllegalArgumentException("集合不存在"));
 
         if (!SecurityUtils.isDevMode()) {
-            if (collection.getOrganization() != null) {
-                if (!permissionService.canManageOrganization(collection.getOrganization().getId(), user)) {
+            if (collection.getUser() != null && !collection.getUser().getId().equals(user.getId())) {
+                if (collection.getOrganization() == null
+                        || !permissionService.canManageOrganization(collection.getOrganization().getId(), user)) {
                     throw new ResponseStatusException(FORBIDDEN, "您没有删除此 API 用例的权限");
                 }
-            } else if (!collectionRepository.existsByIdAndUserId(id, user.getId())) {
-                throw new ResponseStatusException(FORBIDDEN, "您没有删除此 API 用例的权限");
             }
         }
 

@@ -88,7 +88,11 @@ public class UiTestCaseService {
         UiTestCase entity = testCaseRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("测试用例不存在: " + id));
 
-        if (!SecurityUtils.isDevMode()) {
+        if (SecurityUtils.isDevMode()) {
+            if (entity.getUser() != null && !entity.getUser().isDevMode()) {
+                throw new ResponseStatusException(FORBIDDEN, "开发者模式不能修改非开发者创建的测试用例");
+            }
+        } else {
             if (entity.getUser() != null && !entity.getUser().getId().equals(user.getId())) {
                 if (entity.getOrganization() == null || !permissionService.canManageOrganization(entity.getOrganization().getId(), user)) {
                     throw new ResponseStatusException(FORBIDDEN, "您没有修改此用例的权限");

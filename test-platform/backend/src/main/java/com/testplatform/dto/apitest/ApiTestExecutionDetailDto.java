@@ -20,6 +20,7 @@ public class ApiTestExecutionDetailDto {
     private RequestDto request;
     private ResponseDto response;
     private java.util.List<AssertionResultDto> assertions;
+    private java.util.List<PrescriptResultDto> prescriptResults;
 
     private Instant createdAt;
     private Instant updatedAt;
@@ -49,5 +50,29 @@ public class ApiTestExecutionDetailDto {
         private Boolean passed;
         private String expected;
         private String actual;
+    }
+
+    @Data
+    public static class PrescriptResultDto {
+        private Integer index;
+        private String stepType;
+        private String title;
+        private String status;
+        private Boolean stopOnFail;
+        private String message;
+        private String errorMessage;
+        private String variableName;
+        private String variableValue;
+        private RequestDto request;
+        private ResponseDto response;
+        private java.util.List<AssertionResultDto> assertions;
+        private java.util.List<ExtractedVariableDto> extractedVariables;
+    }
+
+    @Data
+    public static class ExtractedVariableDto {
+        private String name;
+        private String path;
+        private String value;
     }
 }

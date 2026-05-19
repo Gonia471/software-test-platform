@@ -9,6 +9,7 @@ import com.testplatform.dto.apitest.SaveExecutionRequest;
 import com.testplatform.entity.User;
 import com.testplatform.entity.apitest.ApiTestExecution;
 import com.testplatform.repository.apitest.ApiTestExecutionRepository;
+import com.testplatform.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -28,8 +29,13 @@ public class ApiTestExecutionService {
 
     @Transactional(readOnly = true)
     public List<ApiTestExecutionSummaryDto> listRecentExecutions(Long userId, int limit) {
-        List<ApiTestExecution> executions = executionRepository.findRecentByUserId(
-                userId, PageRequest.of(0, limit));
+        List<ApiTestExecution> executions;
+        if (SecurityUtils.isDevMode()) {
+            executions = executionRepository.findAll(PageRequest.of(0, limit)).getContent();
+        } else {
+            executions = executionRepository.findRecentByUserId(
+                    userId, PageRequest.of(0, limit));
+        }
 
         return executions.stream()
                 .map(this::toSummaryDto)
@@ -41,7 +47,7 @@ public class ApiTestExecutionService {
         ApiTestExecution execution = executionRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("执行记录不存在: " + id));
 
-        if (!execution.getUser().getId().equals(userId)) {
+        if (!SecurityUtils.isDevMode() && !execution.getUser().getId().equals(userId)) {
             throw new IllegalArgumentException("无权限访问该执行记录");
         }
 
@@ -55,6 +61,7 @@ public class ApiTestExecutionService {
         execution.setCollectionId(request.getCollectionId());
         execution.setCollectionName(request.getCollectionName());
         execution.setStatus(ApiTestExecution.TestStatus.valueOf(request.getStatus()));
+        execution.setErrorMessage(request.getErrorMessage());
 
         if (request.getRequest() != null) {
             execution.setRequestJson(toJson(request.getRequest()));
@@ -79,16 +86,32 @@ public class ApiTestExecutionService {
             execution.setAssertionsJson(toJson(request.getAssertions()));
         }
 
+        if (request.getPrescriptResults() != null) {
+            execution.setPrescriptResultsJson(toJson(request.getPrescriptResults()));
+        }
+
         ApiTestExecution saved = executionRepository.save(execution);
         return toSummaryDto(saved);
     }
 
     @Transactional(readOnly = true)
     public Map<String, Object> getStatistics(Long userId) {
-        long total = executionRepository.countByUserId(userId);
-        long success = executionRepository.countByUserIdAndStatus(userId, ApiTestExecution.TestStatus.SUCCESS);
-        long failed = executionRepository.countByUserIdAndStatus(userId, ApiTestExecution.TestStatus.FAILED);
-        long error = executionRepository.countByUserIdAndStatus(userId, ApiTestExecution.TestStatus.ERROR);
+        long total;
+        long success;
+        long failed;
+        long error;
+        if (SecurityUtils.isDevMode()) {
+            List<ApiTestExecution> executions = executionRepository.findAll();
+            total = executions.size();
+            success = executions.stream().filter(item -> item.getStatus() == ApiTestExecution.TestStatus.SUCCESS).count();
+            failed = executions.stream().filter(item -> item.getStatus() == ApiTestExecution.TestStatus.FAILED).count();
+            error = executions.stream().filter(item -> item.getStatus() == ApiTestExecution.TestStatus.ERROR).count();
+        } else {
+            total = executionRepository.countByUserId(userId);
+            success = executionRepository.countByUserIdAndStatus(userId, ApiTestExecution.TestStatus.SUCCESS);
+            failed = executionRepository.countByUserIdAndStatus(userId, ApiTestExecution.TestStatus.FAILED);
+            error = executionRepository.countByUserIdAndStatus(userId, ApiTestExecution.TestStatus.ERROR);
+        }
 
         return Map.of(
                 "total", total,
@@ -139,6 +162,7 @@ public class ApiTestExecutionService {
         dto.setRequest(parseJson(entity.getRequestJson(), ApiTestExecutionDetailDto.RequestDto.class));
         dto.setResponse(parseJson(entity.getResponseJson(), ApiTestExecutionDetailDto.ResponseDto.class));
         dto.setAssertions(parseJsonList(entity.getAssertionsJson()));
+        dto.setPrescriptResults(parseJsonList(entity.getPrescriptResultsJson()));
 
         return dto;
     }

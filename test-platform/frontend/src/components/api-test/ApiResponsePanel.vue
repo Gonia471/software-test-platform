@@ -67,11 +67,16 @@
               v-for="(a, i) in assertionResults"
               :key="i"
               class="assertion-item"
-              :class="{ pass: a.pass, fail: !a.pass }"
+              :class="{ pass: isAssertionPassed(a), fail: !isAssertionPassed(a) }"
             >
-              <el-icon v-if="a.pass"><CircleCheck /></el-icon>
+              <el-icon v-if="isAssertionPassed(a)"><CircleCheck /></el-icon>
               <el-icon v-else><CircleClose /></el-icon>
-              <span>{{ a.message }}</span>
+              <div class="assertion-main">
+                <span>{{ getAssertionMessage(a) }}</span>
+                <small v-if="a.expected || a.actual" class="assertion-meta">
+                  期望：{{ a.expected || '-' }}，实际：{{ a.actual || '-' }}
+                </small>
+              </div>
             </div>
           </div>
         </el-tab-pane>
@@ -151,6 +156,17 @@ function copyResponse() {
   }).catch(() => {
     ElMessage.error('复制失败')
   })
+}
+
+function isAssertionPassed(assertion) {
+  return assertion?.passed ?? assertion?.pass ?? false
+}
+
+function getAssertionMessage(assertion) {
+  if (assertion?.message) {
+    return assertion.message
+  }
+  return assertion?.description || assertion?.type || '断言结果'
 }
 </script>
 
@@ -369,7 +385,7 @@ function copyResponse() {
 
 .assertion-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   padding: 12px 14px;
   font-size: 13px;
@@ -384,5 +400,16 @@ function copyResponse() {
 
 .assertion-item.fail {
   color: #dc2626;
+}
+
+.assertion-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.assertion-meta {
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 </style>

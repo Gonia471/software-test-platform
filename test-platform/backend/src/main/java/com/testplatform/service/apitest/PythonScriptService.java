@@ -140,10 +140,9 @@ public class PythonScriptService {
             } else {
                 result.setSuccess(true);
                 result.setFunctionName(functionName);
-                result.setOutput(output);
-
                 Map<String, String> outputParams = parseFunctionOutput(output);
                 result.setOutputParams(outputParams);
+                result.setOutput(formatDisplayOutput(output, outputParams));
             }
         } catch (Exception e) {
             result.setSuccess(false);
@@ -283,6 +282,25 @@ public class PythonScriptService {
         }
 
         return params;
+    }
+
+    private String formatDisplayOutput(String rawOutput, Map<String, String> outputParams) {
+        if (outputParams != null && !outputParams.isEmpty()) {
+            if (outputParams.size() == 1) {
+                return outputParams.values().iterator().next();
+            }
+            try {
+                return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(outputParams);
+            } catch (Exception ignored) {
+                return outputParams.toString();
+            }
+        }
+
+        if (rawOutput == null || rawOutput.isBlank()) {
+            return "";
+        }
+
+        return rawOutput.replaceAll("__PARAM__.+?__PARAM__", "").trim();
     }
 
     public static class CompileResult {

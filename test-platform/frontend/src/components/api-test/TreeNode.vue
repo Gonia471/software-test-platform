@@ -48,7 +48,7 @@
         @select="$emit('select', $event)"
         @add-folder="$emit('add-folder', $event)"
         @add-case="$emit('add-case', $event)"
-        @rename="$emit('rename', $event)"
+        @rename="(id, name) => $emit('rename', id, name)"
         @delete="$emit('delete', $event)"
       />
     </div>

@@ -8,6 +8,7 @@ import com.testplatform.entity.User;
 import com.testplatform.repository.OrganizationRepository;
 import com.testplatform.repository.ProjectRepository;
 import com.testplatform.repository.UserRepository;
+import com.testplatform.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,11 @@ public class ProjectService {
 
     @Transactional(readOnly = true)
     public List<ProjectDto> getUserProjects(User user) {
+        if (SecurityUtils.isDevMode()) {
+            return projectRepository.findAll().stream()
+                    .map(this::toDto)
+                    .collect(Collectors.toList());
+        }
         return organizationRepository.findAllByMember(user).stream()
                 .flatMap(org -> projectRepository.findAllByOrganizationId(org.getId()).stream())
                 .map(this::toDto)
@@ -39,7 +45,7 @@ public class ProjectService {
                 .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
                         HttpStatus.NOT_FOUND, "组织不存在"));
 
-        if (!organizationRepository.isMember(org.getId(), user.getId())) {
+        if (!SecurityUtils.isDevMode() && !organizationRepository.isMember(org.getId(), user.getId())) {
             throw new org.springframework.web.server.ResponseStatusException(
                     HttpStatus.FORBIDDEN, "无权限在该组织创建项目");
         }
@@ -66,7 +72,7 @@ public class ProjectService {
     public ProjectDto getProject(Long id, User user) {
         Project project = findProjectOrThrow(id);
 
-        if (!organizationRepository.isMember(project.getOrganization().getId(), user.getId())) {
+        if (!SecurityUtils.isDevMode() && !organizationRepository.isMember(project.getOrganization().getId(), user.getId())) {
             throw new org.springframework.web.server.ResponseStatusException(
                     HttpStatus.FORBIDDEN, "无权限访问该项目");
         }
@@ -78,7 +84,7 @@ public class ProjectService {
     public ProjectDto updateProject(Long id, UpdateProjectRequest request, User user) {
         Project project = findProjectOrThrow(id);
 
-        if (!project.getOwner().getId().equals(user.getId())) {
+        if (!SecurityUtils.isDevMode() && !project.getOwner().getId().equals(user.getId())) {
             throw new org.springframework.web.server.ResponseStatusException(
                     HttpStatus.FORBIDDEN, "只有项目所有者才能修改项目信息");
         }
@@ -121,7 +127,7 @@ public class ProjectService {
     public void deleteProject(Long id, User user) {
         Project project = findProjectOrThrow(id);
 
-        if (!project.getOwner().getId().equals(user.getId())) {
+        if (!SecurityUtils.isDevMode() && !project.getOwner().getId().equals(user.getId())) {
             throw new org.springframework.web.server.ResponseStatusException(
                     HttpStatus.FORBIDDEN, "只有项目所有者才能删除项目");
         }

@@ -211,6 +211,111 @@
                     </div>
                     <el-empty v-else description="暂无断言结果" />
                   </el-tab-pane>
+
+                  <el-tab-pane label="前置步骤" name="prescripts">
+                    <div v-if="apiDetail.prescriptResults && apiDetail.prescriptResults.length > 0" class="prescripts-section">
+                      <div
+                        v-for="(step, idx) in apiDetail.prescriptResults"
+                        :key="idx"
+                        class="prescript-card"
+                      >
+                        <div class="prescript-card__header">
+                          <div class="prescript-card__title">
+                            <span class="prescript-index">#{{ step.index || idx + 1 }}</span>
+                            <span>{{ step.title || step.stepType || '前置步骤' }}</span>
+                          </div>
+                          <div class="prescript-card__meta">
+                            <el-tag size="small" effect="plain">{{ step.stepType || '-' }}</el-tag>
+                            <el-tag :type="prescriptStatusType(step.status)" size="small">
+                              {{ prescriptStatusText(step.status) }}
+                            </el-tag>
+                            <el-tag v-if="step.stopOnFail" type="warning" size="small" effect="plain">失败终止</el-tag>
+                          </div>
+                        </div>
+
+                        <div v-if="step.message" class="section-item">
+                          <div class="section-label">执行结果</div>
+                          <div class="code-block">{{ step.message }}</div>
+                        </div>
+
+                        <div v-if="step.variableName" class="section-item">
+                          <div class="section-label">变量设置</div>
+                          <div class="code-block">{{ step.variableName }} = {{ step.variableValue || '' }}</div>
+                        </div>
+
+                        <div v-if="step.request" class="section-item">
+                          <div class="section-label">步骤请求</div>
+                          <div class="mini-section">
+                            <div class="mini-row">
+                              <el-tag :type="methodTagType(step.request.method)" size="small">
+                                {{ step.request.method || 'GET' }}
+                              </el-tag>
+                              <span class="detail-url">{{ step.request.url }}</span>
+                            </div>
+                            <pre v-if="step.request.headers && Object.keys(step.request.headers).length > 0" class="code-block">{{ formatJson(step.request.headers) }}</pre>
+                            <pre v-if="step.request.body" class="code-block">{{ formatBody(step.request.body) }}</pre>
+                          </div>
+                        </div>
+
+                        <div v-if="step.response" class="section-item">
+                          <div class="section-label">步骤响应</div>
+                          <div class="mini-section">
+                            <div class="mini-row">
+                              <el-tag :type="httpStatusType(step.response.status)" size="small">
+                                {{ step.response.status || '-' }}
+                              </el-tag>
+                              <span>{{ step.response.statusText || '-' }}</span>
+                              <span>耗时 {{ step.response.duration || 0 }}ms</span>
+                            </div>
+                            <pre v-if="step.response.headers && Object.keys(step.response.headers).length > 0" class="code-block">{{ formatJson(step.response.headers) }}</pre>
+                            <pre v-if="step.response.body" class="code-block response-body">{{ formatBody(step.response.body) }}</pre>
+                          </div>
+                        </div>
+
+                        <div v-if="step.extractedVariables && step.extractedVariables.length > 0" class="section-item">
+                          <div class="section-label">提取变量</div>
+                          <div class="extracted-list">
+                            <div
+                              v-for="(item, extractedIdx) in step.extractedVariables"
+                              :key="`${idx}-${extractedIdx}`"
+                              class="extracted-item"
+                            >
+                              <span class="extracted-name">{{ item.name }}</span>
+                              <span class="extracted-path">{{ item.path }}</span>
+                              <span class="extracted-value">{{ item.value }}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div v-if="step.assertions && step.assertions.length > 0" class="section-item">
+                          <div class="section-label">步骤断言</div>
+                          <div class="assertions-section">
+                            <div
+                              v-for="(assertion, assertionIdx) in step.assertions"
+                              :key="`${idx}-${assertionIdx}`"
+                              class="assertion-item"
+                              :class="{ passed: assertion.passed, failed: !assertion.passed }"
+                            >
+                              <el-icon><Check v-if="assertion.passed" /><Close v-else /></el-icon>
+                              <div class="assertion-content">
+                                <div class="assertion-description">{{ assertion.description || assertion.type }}</div>
+                                <div class="assertion-details">
+                                  <span>期望: {{ assertion.expected }}</span>
+                                  <span>实际: {{ assertion.actual }}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div v-if="step.errorMessage" class="section-item">
+                          <div class="section-label">错误信息</div>
+                          <pre class="code-block error-body">{{ step.errorMessage }}</pre>
+                        </div>
+                      </div>
+                    </div>
+                    <el-empty v-else description="暂无前置步骤结果" />
+                  </el-tab-pane>
                 </el-tabs>
               </div>
               <el-empty v-else description="请从左侧选择一条执行记录" />
@@ -266,6 +371,20 @@ function httpStatusType(status) {
   if (status >= 400 && status < 500) return 'warning'
   if (status >= 500) return 'danger'
   return 'info'
+}
+
+function prescriptStatusType(status) {
+  if (status === 'SUCCESS') return 'success'
+  if (status === 'FAILED') return 'danger'
+  if (status === 'SKIPPED') return 'info'
+  return 'warning'
+}
+
+function prescriptStatusText(status) {
+  if (status === 'SUCCESS') return '成功'
+  if (status === 'FAILED') return '失败'
+  if (status === 'SKIPPED') return '已跳过'
+  return status || '未知'
 }
 
 function methodTagType(method) {
@@ -559,7 +678,8 @@ watch(activeTab, (tab) => {
 
 .request-section,
 .response-section,
-.assertions-section {
+.assertions-section,
+.prescripts-section {
   padding: 12px 4px;
 }
 
@@ -628,6 +748,95 @@ watch(activeTab, (tab) => {
   gap: 16px;
 }
 
+.prescript-card {
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+  margin-bottom: 12px;
+}
+
+.prescript-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.prescript-card__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.prescript-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.prescript-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.mini-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mini-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.extracted-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.extracted-item {
+  display: grid;
+  grid-template-columns: 120px 1fr 1fr;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f8fbff;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  font-size: 12px;
+}
+
+.extracted-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.extracted-path,
+.extracted-value {
+  color: var(--el-text-color-secondary);
+  word-break: break-all;
+}
+
 @media (max-width: 1200px) {
   .report-hero {
     flex-direction: column;
@@ -636,6 +845,15 @@ watch(activeTab, (tab) => {
   .report-hero__side {
     min-width: 0;
     grid-template-columns: 1fr 1fr;
+  }
+
+  .prescript-card__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .extracted-item {
+    grid-template-columns: 1fr;
   }
 }
 </style>

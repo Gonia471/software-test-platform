@@ -11,6 +11,7 @@
       <div class="env-toolbar">
         <div class="toolbar-meta">
           <span class="meta-chip">{{ environments.length }} 个环境</span>
+          <span v-if="organizationName" class="meta-chip meta-chip--org">当前组织：{{ organizationName }}</span>
           <span class="meta-tip">支持设置变量，并在 URL、请求头、认证信息中通过 <code v-pre>{{变量名}}</code> 方式引用</span>
         </div>
         <el-button type="primary" plain :icon="Plus" @click="addEnv">
@@ -94,6 +95,7 @@ const props = defineProps({
   modelValue: { type: Boolean, default: false },
   environments: { type: Array, default: () => [] },
   currentEnvId: { type: String, default: '' },
+  organizationName: { type: String, default: '' },
 })
 
 const emit = defineEmits(['update:modelValue', 'update-env', 'remove-env', 'add-env', 'set-current'])
@@ -203,6 +205,11 @@ function handleClose() {
   color: #2563eb;
   font-size: 12px;
   font-weight: 600;
+}
+
+.meta-chip--org {
+  background: rgba(16, 185, 129, 0.1);
+  color: #047857;
 }
 
 .meta-tip {
